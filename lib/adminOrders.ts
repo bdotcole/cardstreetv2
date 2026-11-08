@@ -35,6 +35,7 @@ export interface AdminContact extends AdminPerson {
     joinedAt: string | null
     bannedAt: string | null
     chatBannedUntil: string | null
+    role: string | null
     /** Seller only. */
     stripe: { chargesEnabled: boolean; payoutsEnabled: boolean; detailsSubmitted: boolean; hasAccount: boolean } | null
 }

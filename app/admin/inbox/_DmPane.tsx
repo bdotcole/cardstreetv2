@@ -12,12 +12,14 @@ const POLL_MS = 10_000
  * A chat with the support shop. With no threadId it is a new conversation:
  * nothing exists until the first message, which creates it.
  */
-export function DmPane({ threadId, person: initialPerson, auto, onChanged, onStarted }: {
+export function DmPane({ threadId, person: initialPerson, auto, onChanged, onStarted, onShowAccount }: {
     threadId: string | null
     person: InboxPerson | null
     auto: boolean
     onChanged: () => void
     onStarted: (threadId: string) => void
+    /** Opens the account drawer (listings, sales, purchases) for the person in this chat. */
+    onShowAccount?: (userId: string) => void
 }) {
     const [person, setPerson] = useState<InboxPerson | null>(initialPerson)
     const [messages, setMessages] = useState<AdminChatMessage[]>([])
@@ -137,16 +139,27 @@ export function DmPane({ threadId, person: initialPerson, auto, onChanged, onSta
                         {person?.username ? `@${person.username} · ` : ''}Chat with the Cardstreet TCG Marketplace shop
                     </p>
                 </div>
-                {person?.username && (
-                    <a
-                        href={`/seller/${encodeURIComponent(person.username)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] font-bold text-brand-cyan hover:underline shrink-0"
-                    >
-                        View shop ↗
-                    </a>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                    {person && onShowAccount && (
+                        <button
+                            onClick={() => onShowAccount(person.id)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-[11px] font-bold hover:bg-white/10 transition"
+                            title="Listings, sales, purchases and contact details"
+                        >
+                            <i className="fa-regular fa-id-card" />Account
+                        </button>
+                    )}
+                    {person?.username && (
+                        <a
+                            href={`/seller/${encodeURIComponent(person.username)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-bold text-brand-cyan hover:underline"
+                        >
+                            View shop ↗
+                        </a>
+                    )}
+                </div>
             </div>
 
             <div ref={scrollRef} className="glass rounded-2xl border border-white/10 p-4 space-y-3 flex-1 min-h-[16rem] overflow-y-auto">

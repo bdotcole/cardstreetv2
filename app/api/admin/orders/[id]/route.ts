@@ -12,73 +12,12 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/adminAuth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SUPPORT_CHAT_USER_ID, findThreadBetween, isUnread } from '@/lib/chat.server'
-import { formatPickupAddress } from '@/lib/parcels'
-import {
-    UUID_RE, shortOrderId,
-    type AdminContact, type AdminOrderDetail, type AdminOrderThread, type AdminOrderTicket,
-} from '@/lib/adminOrders'
-import { ORDER_SELECT, itemOf, loadCheckoutSizes, loadPeople, num, toListItem, type OrderRow } from '@/lib/adminOrders.server'
+import { UUID_RE, shortOrderId, type AdminOrderDetail, type AdminOrderThread, type AdminOrderTicket } from '@/lib/adminOrders'
+import { ORDER_SELECT, itemOf, loadCheckoutSizes, loadContact, loadPeople, num, toListItem, type OrderRow } from '@/lib/adminOrders.server'
 
 export const dynamic = 'force-dynamic'
 
 type Admin = ReturnType<typeof createAdminClient>
-
-const CONTACT_COLUMNS =
-    'id, username, display_name, avatar_url, phone_number, address, sub_district, district, state, province, postcode, created_at, banned_at, chat_banned_until, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted'
-
-interface ContactRow {
-    id: string
-    username: string | null
-    display_name: string | null
-    avatar_url: string | null
-    phone_number?: string | null
-    address?: string | null
-    sub_district?: string | null
-    district?: string | null
-    state?: string | null
-    province?: string | null
-    postcode?: string | null
-    created_at?: string | null
-    banned_at?: string | null
-    chat_banned_until?: string | null
-    stripe_account_id?: string | null
-    stripe_charges_enabled?: boolean | null
-    stripe_payouts_enabled?: boolean | null
-    stripe_details_submitted?: boolean | null
-}
-
-async function loadContact(admin: Admin, id: string | null, seller: boolean): Promise<AdminContact | null> {
-    if (!id) return null
-    const first = await admin.from('profiles').select(CONTACT_COLUMNS).eq('id', id).maybeSingle<ContactRow>()
-    let data = first.data
-    if (first.error) {
-        // A column from a later migration is missing: show who they are at least.
-        console.error('[admin/orders] contact read failed:', first.error.message)
-        data = (await admin.from('profiles').select('id, username, display_name, avatar_url').eq('id', id).maybeSingle<ContactRow>()).data
-    }
-    const auth = await admin.auth.admin.getUserById(id)
-    const p = data ?? { id, username: null, display_name: null, avatar_url: null }
-    return {
-        id,
-        username: p.username,
-        display_name: p.display_name,
-        avatar_url: p.avatar_url,
-        email: auth.data?.user?.email ?? null,
-        phone: p.phone_number ?? null,
-        address: formatPickupAddress(p),
-        joinedAt: p.created_at ?? auth.data?.user?.created_at ?? null,
-        bannedAt: p.banned_at ?? null,
-        chatBannedUntil: p.chat_banned_until ?? null,
-        stripe: seller
-            ? {
-                hasAccount: !!p.stripe_account_id,
-                chargesEnabled: !!p.stripe_charges_enabled,
-                payoutsEnabled: !!p.stripe_payouts_enabled,
-                detailsSubmitted: !!p.stripe_details_submitted,
-            }
-            : null,
-    }
-}
 
 async function loadThread(admin: Admin, personId: string | null): Promise<AdminOrderThread | null> {
     if (!personId || personId === SUPPORT_CHAT_USER_ID) return null

@@ -16,11 +16,13 @@ const REPORT_ACTIONS: { status: string; label: string }[] = [
  * the seller stays on the User Reports page, which has those tools; answering
  * the reporter (or the seller) is a DM from the support shop, here.
  */
-export function ReportPane({ item, auto, onChanged, onMessage }: {
+export function ReportPane({ item, auto, onChanged, onMessage, onShowAccount }: {
     item: InboxItem
     auto: boolean
     onChanged: () => void
     onMessage: (person: InboxPerson) => void
+    /** Opens the account drawer (listings, sales, purchases) for the reporter or the seller. */
+    onShowAccount?: (userId: string) => void
 }) {
     const report = item.report!
     const [status, setStatus] = useState(item.status)
@@ -126,6 +128,16 @@ export function ReportPane({ item, auto, onChanged, onMessage }: {
                     {target && (
                         <button onClick={() => onMessage(target)} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-bold hover:bg-white/10">
                             <i className="fa-regular fa-comment mr-1.5" />Message seller
+                        </button>
+                    )}
+                    {reporter && onShowAccount && (
+                        <button onClick={() => onShowAccount(reporter.id)} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-bold hover:bg-white/10">
+                            <i className="fa-regular fa-id-card mr-1.5" />Reporter&apos;s account
+                        </button>
+                    )}
+                    {target && onShowAccount && (
+                        <button onClick={() => onShowAccount(target.id)} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-bold hover:bg-white/10">
+                            <i className="fa-regular fa-id-card mr-1.5" />Seller&apos;s account
                         </button>
                     )}
                     <a href="/admin/reports" className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 text-xs font-bold hover:bg-white/10">

@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { languageName } from '@/lib/languageNames'
+import type { TranslateError } from '@/lib/supportTranslate'
 
 // Machine translation for the admin support inbox. Everything goes through the
 // admin-gated /api/admin/tickets/translate (lib/supportTranslate, Gemini).
@@ -29,8 +30,42 @@ export function scriptLang(text: string | null | undefined): ReplyLang | null {
     return null
 }
 
-const MAX_BATCH_ITEMS = 60
-const MAX_BATCH_CHARS = 30_000
+// ─── Service status ──────────────────────────────────────────────────────────
+//
+// Why the inbox ever fell silent: on 2026-11-08 Gemini refused every call
+// (402, prepaid credits used up) and the inbox simply showed the originals
+// with a Translate link that did nothing. The route now reports why a batch
+// failed and the last answer is kept here, so the page can say so.
+
+let translateStatus: TranslateError | null = null
+const statusListeners = new Set<() => void>()
+function setTranslateStatus(next: TranslateError | null) {
+    if (next?.code === translateStatus?.code && next?.message === translateStatus?.message) return
+    translateStatus = next
+    for (const l of statusListeners) l()
+}
+const subscribeStatus = (l: () => void) => { statusListeners.add(l); return () => { statusListeners.delete(l) } }
+const getStatus = () => translateStatus
+const getServerStatus = () => null
+
+/** The last translation failure, or null while the service answers. */
+export function useTranslationStatus(): TranslateError | null {
+    return useSyncExternalStore(subscribeStatus, getStatus, getServerStatus)
+}
+
+/** One line for the team, with what to do about it. */
+export function describeTranslateError(err: TranslateError): string {
+    switch (err.code) {
+        case 'billing':
+            return 'Gemini prepaid credits are used up. Top up in Google AI Studio (ai.studio/projects, Billing). Card scanning uses the same account, so it is affected too.'
+        case 'rate_limit':
+            return 'Gemini quota or rate limit reached. It usually clears within a minute.'
+        case 'no_key':
+            return 'GEMINI_API_KEY is not set on the server.'
+        default:
+            return err.message || 'The translation service is not answering.'
+    }
+}
 
 /**
  * Translates a batch. Per id: a Translation, null when the text needs none,
@@ -46,13 +81,21 @@ export async function requestTranslations(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items, target }),
         })
-        if (!res.ok) return null
+        if (!res.ok) {
+            setTranslateStatus({ code: 'unavailable', message: `The translation request failed (${res.status}).` })
+            return null
+        }
         const data = await res.json()
+        setTranslateStatus(data.error ?? null)
         return data.translations ?? null
     } catch {
+        setTranslateStatus({ code: 'unavailable', message: 'Could not reach the translation service.' })
         return null
     }
 }
+
+const MAX_BATCH_ITEMS = 60
+const MAX_BATCH_CHARS = 30_000
 
 // The route caps a call at 60 items and 40k characters.
 function chunk(items: { id: string; text: string }[]) {
@@ -131,7 +174,8 @@ export type Translator = ReturnType<typeof useTranslator>
 
 /**
  * The English under a customer message: shown automatically when
- * auto-translate is on, behind a Translate link when it is off.
+ * auto-translate is on, behind a Translate link when it is off. When the
+ * service is failing it says so instead of offering a link that does nothing.
  */
 export function TranslationBlock({ id, text, translator, auto }: {
     id: string
@@ -139,6 +183,7 @@ export function TranslationBlock({ id, text, translator, auto }: {
     translator: Translator
     auto: boolean
 }) {
+    const status = useTranslationStatus()
     if (!needsEnglish(text)) return null
     const translation = translator.map[id]
     const visible = auto || translator.manual.has(id)
@@ -146,6 +191,17 @@ export function TranslationBlock({ id, text, translator, auto }: {
         return <p className="text-[10px] text-slate-500 mt-2 italic">Translating to English…</p>
     }
     if (!visible || translation === undefined) {
+        if (visible && status) {
+            return (
+                <p className="mt-2 text-[10px] text-amber-300/90">
+                    <i className="fa-solid fa-triangle-exclamation mr-1" />
+                    Not translated: {describeTranslateError(status)}{' '}
+                    <button onClick={() => translator.translate([{ id, text: text! }], { manual: true })} className="font-bold underline hover:text-amber-200">
+                        Try again
+                    </button>
+                </p>
+            )
+        }
         return (
             <button
                 onClick={() => translator.translate([{ id, text: text! }], { manual: true })}
@@ -163,6 +219,21 @@ export function TranslationBlock({ id, text, translator, auto }: {
                 English · translated from {languageName(translation.sourceLang)}
             </p>
             <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-wrap break-words">{translation.text}</p>
+        </div>
+    )
+}
+
+/** The banner the inbox and the composer show while translation is failing. */
+export function TranslationStatusNotice({ auto }: { auto: boolean }) {
+    const status = useTranslationStatus()
+    if (!status) return null
+    return (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">
+            <i className="fa-solid fa-triangle-exclamation mt-0.5 shrink-0" />
+            <p>
+                <span className="font-bold">{auto ? 'Auto-translate is on but translation is not working.' : 'Translation is not working.'}</span>{' '}
+                {describeTranslateError(status)} Messages show in their original language until it is fixed.
+            </p>
         </div>
     )
 }

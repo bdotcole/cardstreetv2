@@ -6,6 +6,7 @@ import {
     FLAG_TONE_CLASS, ORDER_STATUS_TONE, personName, statusLabel, worstTone, type AdminOrderListItem,
 } from '@/lib/adminOrders'
 import { Spinner, when } from '../inbox/_parts'
+import { AccountDrawer } from '../_AccountDrawer'
 import { OrderPane } from './_OrderPane'
 
 // The order lookup for the support team: paste whatever the buyer or seller
@@ -36,6 +37,7 @@ function OrdersLookup() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [openId, setOpenId] = useState<string | null>(null)
+    const [account, setAccount] = useState<string | null>(null)
     const requestRef = useRef(0)
 
     const load = useCallback(async (query: string, wanted: View) => {
@@ -161,13 +163,20 @@ function OrdersLookup() {
                         <span className="lg:hidden">Back</span>
                         <span className="hidden lg:inline">Close</span>
                     </button>
-                    <OrderPane key={openId} orderId={openId} onOpenOrder={setOpenId} />
+                    <OrderPane key={openId} orderId={openId} onOpenOrder={setOpenId} onShowAccount={setAccount} />
                 </div>
             ) : (
                 <div className="hidden lg:flex flex-1 flex-col items-center justify-center gap-2 glass rounded-2xl border border-white/10 text-center px-8">
                     <i className="fa-solid fa-box-open text-2xl text-slate-600" />
                     <p className="text-slate-500 text-sm">Pick an order to see the parcel, the buyer and the seller with their contact details.</p>
                 </div>
+            )}
+            {account && (
+                <AccountDrawer
+                    userId={account}
+                    onClose={() => setAccount(null)}
+                    onOpenOrder={id => { setAccount(null); setOpenId(id) }}
+                />
             )}
         </div>
     )

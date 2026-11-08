@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     inboxKey, parseInboxKey, personName, type InboxItem, type InboxKind, type InboxPerson,
 } from '@/lib/supportInbox'
-import { useAutoTranslate, useTranslator } from '../_translation'
+import { TranslationStatusNotice, useAutoTranslate, useTranslator } from '../_translation'
+import { AccountDrawer } from '../_AccountDrawer'
 import { KindChip, Spinner, StatusChip, initials, when } from './_parts'
 import { DmPane } from './_DmPane'
 import { TicketPane } from './_TicketPane'
@@ -57,6 +58,8 @@ export default function SupportInboxPage() {
     const [filter, setFilter] = useState<Filter>('all')
     const [open, setOpen] = useState<OpenPane | null>(null)
     const [paneNotice, setPaneNotice] = useState<string | null>(null)
+    // The account drawer: who this person is, their listings, sales and purchases.
+    const [account, setAccount] = useState<string | null>(null)
     const listTr = useTranslator()
     const { translate } = listTr
     const deepLinkRef = useRef<string | null>(null)
@@ -187,6 +190,8 @@ export default function SupportInboxPage() {
                     </button>
                 </div>
 
+                <TranslationStatusNotice auto={auto === true} />
+
                 <div className="flex flex-wrap gap-1.5">
                     {FILTERS.map(f => (
                         <button
@@ -273,13 +278,14 @@ export default function SupportInboxPage() {
                                 setOpen({ key: inboxKey('dm', threadId), kind: 'dm', id: threadId, person: open.person })
                                 fetchList()
                             }}
+                            onShowAccount={setAccount}
                         />
                     )}
                     {open.kind === 'ticket' && open.id && (
-                        <TicketPane key={open.key} ticketId={open.id} auto={auto === true} onChanged={refresh} />
+                        <TicketPane key={open.key} ticketId={open.id} auto={auto === true} onChanged={refresh} onShowAccount={setAccount} />
                     )}
                     {open.kind === 'report' && (openListItem?.report ? (
-                        <ReportPane key={open.key} item={openListItem} auto={auto === true} onChanged={refresh} onMessage={messagePerson} />
+                        <ReportPane key={open.key} item={openListItem} auto={auto === true} onChanged={refresh} onMessage={messagePerson} onShowAccount={setAccount} />
                     ) : (
                         <p className="text-center text-slate-500 text-sm py-10">That report is not in the inbox.</p>
                     ))}
@@ -290,6 +296,7 @@ export default function SupportInboxPage() {
                     <p className="text-slate-500 text-sm">Pick a conversation</p>
                 </div>
             )}
+            {account && <AccountDrawer userId={account} onClose={() => setAccount(null)} />}
         </div>
     )
 }

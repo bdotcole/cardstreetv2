@@ -2,9 +2,10 @@ import 'server-only'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { embedArray } from '@/lib/utils/embed'
 import { loadChatUsers } from '@/lib/supportChat.server'
+import { formatPickupAddress } from '@/lib/parcels'
 import {
     OPEN_ORDER_STATUSES, UUID_RE, orderFlags, shortIdRange, shortOrderId,
-    type AdminOrderItem, type AdminOrderListItem, type AdminParcel, type AdminPerson, type ParsedOrderQuery,
+    type AdminContact, type AdminOrderItem, type AdminOrderListItem, type AdminParcel, type AdminPerson, type ParsedOrderQuery,
 } from '@/lib/adminOrders'
 
 // Server side of the admin order lookup: the orders query, the search legs
@@ -272,4 +273,70 @@ export async function recentOrders(admin: Admin, limit = 60): Promise<OrderRow[]
         .limit(limit)
     if (error) throw new Error(error.message)
     return (data ?? []) as OrderRow[]
+}
+
+// ─── Contact details ─────────────────────────────────────────────────────────
+
+const CONTACT_COLUMNS =
+    'id, username, display_name, avatar_url, role, phone_number, address, sub_district, district, state, province, postcode, created_at, banned_at, chat_banned_until, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted'
+
+interface ContactRow {
+    id: string
+    username: string | null
+    display_name: string | null
+    avatar_url: string | null
+    role?: string | null
+    phone_number?: string | null
+    address?: string | null
+    sub_district?: string | null
+    district?: string | null
+    state?: string | null
+    province?: string | null
+    postcode?: string | null
+    created_at?: string | null
+    banned_at?: string | null
+    chat_banned_until?: string | null
+    stripe_account_id?: string | null
+    stripe_charges_enabled?: boolean | null
+    stripe_payouts_enabled?: boolean | null
+    stripe_details_submitted?: boolean | null
+}
+
+/**
+ * Who a person is and how to reach them: profile (service role, so phone and
+ * address are visible) plus the sign-in email from auth. `seller` adds the
+ * Stripe state. Never throws; a profile that cannot be read still returns the id.
+ */
+export async function loadContact(admin: Admin, id: string | null, seller: boolean): Promise<AdminContact | null> {
+    if (!id) return null
+    const first = await admin.from('profiles').select(CONTACT_COLUMNS).eq('id', id).maybeSingle<ContactRow>()
+    let data = first.data
+    if (first.error) {
+        // A column from a later migration is missing: show who they are at least.
+        console.error('[admin/orders] contact read failed:', first.error.message)
+        data = (await admin.from('profiles').select('id, username, display_name, avatar_url').eq('id', id).maybeSingle<ContactRow>()).data
+    }
+    const auth = await admin.auth.admin.getUserById(id)
+    const p = data ?? { id, username: null, display_name: null, avatar_url: null }
+    return {
+        id,
+        username: p.username,
+        display_name: p.display_name,
+        avatar_url: p.avatar_url,
+        email: auth.data?.user?.email ?? null,
+        phone: p.phone_number ?? null,
+        address: formatPickupAddress(p),
+        joinedAt: p.created_at ?? auth.data?.user?.created_at ?? null,
+        bannedAt: p.banned_at ?? null,
+        chatBannedUntil: p.chat_banned_until ?? null,
+        role: p.role ?? null,
+        stripe: seller
+            ? {
+                hasAccount: !!p.stripe_account_id,
+                chargesEnabled: !!p.stripe_charges_enabled,
+                payoutsEnabled: !!p.stripe_payouts_enabled,
+                detailsSubmitted: !!p.stripe_details_submitted,
+            }
+            : null,
+    }
 }

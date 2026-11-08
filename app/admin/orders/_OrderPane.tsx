@@ -16,7 +16,12 @@ import { Spinner, StatusChip, initials } from '../inbox/_parts'
 const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : null)
 const baht = (n: number) => `฿${Math.round(n).toLocaleString()}`
 
-export function OrderPane({ orderId, onOpenOrder }: { orderId: string; onOpenOrder: (id: string) => void }) {
+export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
+    orderId: string
+    onOpenOrder: (id: string) => void
+    /** Opens the account drawer (listings, sales, purchases) for the buyer or seller. */
+    onShowAccount?: (userId: string) => void
+}) {
     const [order, setOrder] = useState<AdminOrderDetail | null>(null)
     const [error, setError] = useState<string | null>(null)
 
@@ -157,8 +162,8 @@ export function OrderPane({ orderId, onOpenOrder }: { orderId: string; onOpenOrd
 
             {/* People */}
             <div className="grid xl:grid-cols-2 gap-3">
-                <PersonCard role="Buyer" contact={order.buyerContact} fallbackName={personName(order.buyer)} addressLabel="Ships to" />
-                <PersonCard role="Seller" contact={order.sellerContact} fallbackName={personName(order.seller)} addressLabel="Pickup address" />
+                <PersonCard role="Buyer" contact={order.buyerContact} fallbackName={personName(order.buyer)} addressLabel="Ships to" onShowAccount={onShowAccount} />
+                <PersonCard role="Seller" contact={order.sellerContact} fallbackName={personName(order.seller)} addressLabel="Pickup address" onShowAccount={onShowAccount} />
             </div>
 
             {/* Parcel + timeline */}
@@ -272,7 +277,13 @@ function contactLine(c: AdminContact | null): string {
     return bits.join(' · ')
 }
 
-function PersonCard({ role, contact, fallbackName, addressLabel }: { role: string; contact: AdminContact | null; fallbackName: string; addressLabel: string }) {
+function PersonCard({ role, contact, fallbackName, addressLabel, onShowAccount }: {
+    role: string
+    contact: AdminContact | null
+    fallbackName: string
+    addressLabel: string
+    onShowAccount?: (userId: string) => void
+}) {
     const name = contact?.display_name?.trim() || contact?.username || fallbackName
     const banned = !!contact?.bannedAt
     const chatBanned = contact?.chatBannedUntil ? Date.parse(contact.chatBannedUntil) > Date.now() || contact.chatBannedUntil === 'infinity' : false
@@ -324,6 +335,11 @@ function PersonCard({ role, contact, fallbackName, addressLabel }: { role: strin
 
             {contact && (
                 <div className="flex flex-wrap gap-2 pt-1">
+                    {onShowAccount && (
+                        <button onClick={() => onShowAccount(contact.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-bold hover:bg-white/10 transition">
+                            <i className="fa-regular fa-id-card" />Account
+                        </button>
+                    )}
                     <a
                         href={`/admin/inbox?dm=${contact.id}`}
                         target="_blank"

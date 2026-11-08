@@ -42,7 +42,13 @@ const TICKET_STATUSES = ['Open', 'In Progress', 'Resolved']
 const TICKET_MAX_CHARS = 5000
 
 /** A support ticket (Profile → Support) or a buyer's problem report on an order. */
-export function TicketPane({ ticketId, auto, onChanged }: { ticketId: string; auto: boolean; onChanged: () => void }) {
+export function TicketPane({ ticketId, auto, onChanged, onShowAccount }: {
+    ticketId: string
+    auto: boolean
+    onChanged: () => void
+    /** Opens the account drawer (listings, sales, purchases) for the ticket's author. */
+    onShowAccount?: (userId: string) => void
+}) {
     const [ticket, setTicket] = useState<Ticket | null>(null)
     const [thread, setThread] = useState<TicketMessage[]>([])
     const [dispute, setDispute] = useState<DisputeInfo | null>(null)
@@ -159,8 +165,13 @@ export function TicketPane({ ticketId, auto, onChanged }: { ticketId: string; au
                 {subjectTr && (auto || translator.manual.has('subject')) && (
                     <p className="text-sm font-semibold text-brand-cyan/90"><i className="fa-solid fa-language mr-1.5" />{subjectTr.text}</p>
                 )}
-                <p className="text-[11px] text-slate-500">
-                    From <span className="text-slate-400 font-semibold">{userName}</span> · {new Date(ticket.created_at).toLocaleString()}
+                <p className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                    <span>From <span className="text-slate-400 font-semibold">{userName}</span> · {new Date(ticket.created_at).toLocaleString()}</span>
+                    {onShowAccount && (
+                        <button onClick={() => onShowAccount(ticket.user_id)} className="inline-flex items-center gap-1 text-brand-cyan font-bold hover:underline">
+                            <i className="fa-regular fa-id-card" />Account
+                        </button>
+                    )}
                 </p>
             </div>
 
