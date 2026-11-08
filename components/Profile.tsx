@@ -418,6 +418,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   });
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  // Starts true so the panel never says "No active orders" before the first
+  // load has answered.
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [sales, setSales] = useState<Sale[]>([]);
   const [shipments, setShipments] = useState<Order[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
@@ -757,6 +760,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
 
   const fetchOrders = async (): Promise<Order[]> => {
     setOrdersError(null);
+    setOrdersLoading(true);
     try {
       // limit=50 (was the 10-row default) so a multi-item purchase's rows
       // can't be clipped at the page boundary and render as a partial group.
@@ -780,6 +784,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       console.error('Error fetching orders:', error);
       setOrdersError(error?.message || 'Network error');
       setOrders([]);
+    } finally {
+      setOrdersLoading(false);
     }
     return [];
   };
@@ -857,6 +863,17 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
     fetchShipments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePanel]);
+
+  // Same for Track Orders. The order page's "View all orders" goes to
+  // /orders, which a phone is bounced to /?tab=orders; that sets the panel
+  // directly, so a buyer who had just paid saw "No active orders". Keyed on
+  // the viewer too: that bounce is a fresh page load, where the panel can
+  // open before the session has been read.
+  useEffect(() => {
+    if (activePanel !== 'orders' || !viewerId) return;
+    fetchOrders().then(syncInFlightOrders);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePanel, viewerId]);
 
   // Swipe-to-dismiss on a delivered/completed shipment card. Optimistic:
   // the cards animate out immediately; on failure the list is refetched so
@@ -1327,7 +1344,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   // Open panel handlers
   const openPanel = (panel: ActivePanel) => {
     setActivePanel(panel);
-    if (panel === 'orders') fetchOrders().then(syncInFlightOrders);
+    // Track Orders loads from its activePanel effect, which does not re-run
+    // when the panel is already open (an order push tapped while on it).
+    if (panel === 'orders' && activePanelRef.current === 'orders') fetchOrders();
     // Sales History, the Seller Dashboard's sub-panel. The dashboard itself
     // loads its lists from the activePanel effect above.
     if (panel === 'sales') fetchSales();
@@ -2006,7 +2025,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
               </div>
 
               <div className="space-y-4">
-                {orders.length === 0 ? (
+                {orders.length === 0 && ordersLoading && viewerId ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-brand-cyan" />
+                  </div>
+                ) : orders.length === 0 ? (
                   <div className="text-center py-12 space-y-4">
                     <Package className="w-12 h-12 text-slate-700 mx-auto" />
                     {ordersError ? (
