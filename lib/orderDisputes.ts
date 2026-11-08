@@ -20,6 +20,19 @@ const REPORTABLE_IN_FLIGHT = ['shipped', 'in_transit', 'out_for_delivery'];
 /** Statuses a buyer may review from. Matches the reviews INSERT policy. */
 export const REVIEWABLE_STATUSES = ['delivered', 'completed'];
 
+/**
+ * Statuses from payment onward. lib/fulfillOrder puts the card in the buyer's
+ * collection when the order is paid, not on delivery, so every one of these
+ * can tell the buyer it is there. Disputed and cancelled orders are left out:
+ * their card may be on its way back out.
+ */
+const PAID_ONWARD_STATUSES = ['paid', 'label_generated', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'completed'];
+
+/** A live-break spot has no card of its own, so fulfilment adds nothing for it. */
+export function cardAddedToCollection(status: string, isBreakOrder: boolean): boolean {
+    return !isBreakOrder && PAID_ONWARD_STATUSES.includes(status);
+}
+
 /** Locale keys for each reason, under the orderActions namespace. */
 export const DISPUTE_REASON_KEYS: Record<DisputeReason, string> = {
     not_received: 'orderActions.reasonNotReceived',

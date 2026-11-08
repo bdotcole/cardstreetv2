@@ -11,7 +11,6 @@ import { isFailedResult } from '@/lib/search/failedResult';
 import { trackSearch } from '@/lib/searchEvents';
 import type { Card } from '@/types';
 import { getOptimizedImageUrl, getPreviewUrl, getThumbnailUrl, shouldSkipNextOptimization, CARD_BLUR_DATA_URL } from '@/lib/imageUtils';
-import { GAMES, getGameLanguages } from '@/lib/games';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import DesktopFaqTeaser from '@/components/desktop/DesktopFaqTeaser';
 import MarketMovers, { MARKET_MOVERS_ENABLED } from '@/components/MarketMovers';
@@ -21,15 +20,16 @@ import { useTranslation } from '@/lib/hooks/useTranslation';
 import ShippingNote from '@/components/ShippingNote';
 import { showShippingNoteOnTile } from '@/lib/shippingDisplay';
 import { getSellerTrust } from '@/lib/sellerTrust';
+import { getDealPercent, conditionBadgeLabel } from '@/lib/listingDisplay';
 import {
-    getDealPercent,
-    conditionBadgeLabel,
-    LISTING_GRADING_COMPANIES,
-    MIN_GRADE_OPTIONS,
-    minGradeLabel,
-    NO_GRADING_FILTER,
-    type GradingFilter,
-} from '@/lib/listingDisplay';
+    clearFilters,
+    countActiveFilters,
+    parseMarketplaceFilters,
+    toListingQuery,
+    writeMarketplaceFilters,
+    type MarketplaceFilterState,
+} from '@/lib/listingFilters';
+import MarketplaceFilterBar from '@/components/desktop/MarketplaceFilterBar';
 import { groupSiblingListings, listingUnits } from '@/lib/listingSiblings';
 import { formatTHB } from '@/lib/currency';
 import SnipeBadge, { isSnipeListing } from '@/components/SnipeBadge';
@@ -44,18 +44,8 @@ const PAGE_SIZE = 60;
 // "Buy Now" regardless of a listing's accepts_offers value.
 const OFFERS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OFFERS === '1';
 
-// Language values match the listing snapshot's `card_data.language`. The service
-// expands 'ja' to also cover sealed's 'jp' code, so a single option covers both.
-const LANGUAGE_LABEL_KEYS: Record<string, string> = {
-    en: 'desktop.english',
-    ja: 'desktop.japanese',
-    th: 'desktop.thai',
-};
-
 // Re-exported for the desktop components that historically imported it here.
 export { formatTHB };
-
-type SortKey = 'newest' | 'price_asc' | 'price_desc' | 'best_deals';
 
 export function listingToCartItem(listing: MarketplaceListing): CartItem {
     return {
@@ -102,37 +92,26 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         }
     }, [searchParams, router, pathPrefix]);
 
-    // ?game=<id> seeds the filter so the game landing pages can send a visitor
-    // straight to that game's listings ("Browse Pokémon listings"). Validated
-    // against GAMES — an unknown id falls back to 'all' rather than filtering
-    // the grid down to nothing. Seed only: the chips own it from then on, so a
-    // later chip click is not fought by the URL.
-    const gameParam = searchParams?.get('game') ?? '';
-    const [game, setGame] = useState(
-        GAMES.some((g) => g.id === gameParam) ? gameParam : 'all',
-    );
-    const [language, setLanguage] = useState('all');
-    const [section, setSection] = useState<'singles' | 'sealed'>('singles');
-    // Raw / graded, grading company, grade floor. Singles only: the row
-    // hides on Sealed and the service ignores it there.
-    const [grading, setGrading] = useState<GradingFilter>(NO_GRADING_FILTER);
+    // Seeded from the URL (game landing pages link ?game=<id>, and Back from a
+    // card page lands on the filters the buyer left). The filter bar owns it
+    // from then on and the URL follows it, so a later click is not fought by it.
+    const [filters, setFilters] = useState<MarketplaceFilterState>(() => parseMarketplaceFilters(searchParams));
+    const { game, section } = filters;
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const before = url.search;
+        writeMarketplaceFilters(url.searchParams, filters);
+        if (url.search !== before) window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        // searchParams: a nav search lands on a bare /?q= and must get the filters back.
+    }, [filters, searchParams]);
+
     // Sign-in wall for a signed-out Watch tap on a tile.
     const [authOpen, setAuthOpen] = useState(false);
 
-    // Game-first flow (mirrors the sets browser): the language sub-filter only
-    // appears once a specific multi-language game is picked. games.ts declares
-    // Japanese as 'jp'; listing snapshots use 'ja', so normalize for the chips.
-    const languageOptions = game === 'all'
-        ? []
-        : getGameLanguages(game).map((l) => (l.code === 'jp' ? 'ja' : l.code));
+    const activeFilterCount = countActiveFilters(filters);
+    const clearAllFilters = () => setFilters(clearFilters);
 
-    const selectGame = (g: string) => {
-        setGame(g);
-        // The language list belongs to the previous game — reset it.
-        setLanguage('all');
-    };
-    // Deals-first, matching the mobile marketplace's default sort.
-    const [sort, setSort] = useState<SortKey>('best_deals');
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -166,12 +145,6 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
     // filter chip or the sort changes.
     const lastTrackedSearchRef = useRef('');
 
-    const gradingParams = {
-        grading: grading.grading === 'any' ? undefined : grading.grading,
-        gradingCompany: grading.gradingCompany || undefined,
-        minGrade: grading.minGrade || undefined,
-    };
-
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
@@ -180,15 +153,7 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         // typo index included, for the listings search and its fallbacks.
         if (q.trim()) preloadSearchDictionary();
         marketplaceService
-            .getActiveListings({
-                search: q || undefined,
-                game,
-                kind: section,
-                language: language === 'all' ? undefined : language,
-                ...gradingParams,
-                sort,
-                limit: PAGE_SIZE,
-            })
+            .getActiveListings({ ...toListingQuery(filters, q), limit: PAGE_SIZE })
             .then((rows) => {
                 if (cancelled) return;
                 // Identical copies fold into one tile with a unit count
@@ -211,21 +176,18 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q, game, language, section, grading, sort]);
+    }, [q, filters]);
 
     const loadMore = async () => {
         setLoadingMore(true);
         try {
             const rows = await marketplaceService.getActiveListings({
-                search: q || undefined,
-                game,
-                kind: section,
-                language: language === 'all' ? undefined : language,
-                ...gradingParams,
-                sort,
+                ...toListingQuery(filters, q),
                 limit: PAGE_SIZE,
-                offset: listings.length,
+                // Rows, not tiles: a tile folds identical copies, so counting
+                // tiles re-reads rows already loaded and can stall the button on
+                // a page of them (one set from one bulk seller, say).
+                offset: listings.reduce((count, l) => count + listingUnits(l), 0),
             });
             // Offset pagination over a live list: a listing created mid-browse
             // shifts the pages, so drop anything already rendered.
@@ -241,144 +203,18 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
 
     return (
         <div>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-black text-white">{t('desktop.marketplaceTitle')}</h1>
-                    <p className="text-sm text-slate-400 mt-1">
-                        {q ? (
-                            <>{t('desktop.resultsFor')} <span className="text-white font-bold">&ldquo;{q}&rdquo;</span></>
-                        ) : (
-                            t('desktop.liveListings')
-                        )}
-                    </p>
-                </div>
-
-                <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-brand-cyan/50 [&>option]:bg-brand-dark"
-                >
-                    <option value="best_deals">{t('desktop.sortBestDeals')}</option>
-                    <option value="newest">{t('desktop.sortNewest')}</option>
-                    <option value="price_asc">{t('desktop.sortPriceAsc')}</option>
-                    <option value="price_desc">{t('desktop.sortPriceDesc')}</option>
-                </select>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-6">
-                {/* Singles / Sealed, matching the mobile shop screen. A section,
-                    not a filter chip — see ListingKind in marketplaceService. */}
-                <div className="flex gap-1 bg-white/5 border border-white/10 rounded-full p-1 mr-2">
-                    {([
-                        { id: 'singles' as const, label: t('marketplace.sectionSingles') },
-                        { id: 'sealed' as const, label: t('marketplace.sectionSealed') },
-                    ]).map(({ id, label }) => (
-                        <button
-                            key={id}
-                            onClick={() => setSection(id)}
-                            className={`px-4 py-1 rounded-full text-xs font-bold transition-colors ${
-                                section === id ? 'bg-brand-cyan text-brand-darker' : 'text-slate-300 hover:text-white'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-                <FilterChip label={t('desktop.allGames')} active={game === 'all'} onClick={() => selectGame('all')} />
-                {GAMES.filter((g) => g.enabled).map((g) => (
-                    <FilterChip key={g.id} label={g.shortName} active={game === g.id} onClick={() => selectGame(g.id)} />
-                ))}
-            </div>
-
-            {/* Language sub-filter — only when the selected game has more than one listing language */}
-            {languageOptions.length > 1 && (
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mr-1">
-                        {t('desktop.browse.language')}
-                    </span>
-                    <FilterChip
-                        label={t('desktop.browse.allLanguages')}
-                        active={language === 'all'}
-                        tone="green"
-                        small
-                        onClick={() => setLanguage('all')}
-                    />
-                    {languageOptions.map((l) => (
-                        <FilterChip
-                            key={l}
-                            label={t(LANGUAGE_LABEL_KEYS[l] ?? l)}
-                            active={language === l}
-                            tone="green"
-                            small
-                            onClick={() => setLanguage(l)}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Grading — singles only; a sealed product is never graded. The
-                company and grade-floor chips appear once Graded is picked. */}
-            {section === 'singles' && (
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mr-1">
-                        {t('marketplace.grading')}
-                    </span>
-                    {([
-                        { id: 'any' as const, label: t('marketplace.gradingAny') },
-                        { id: 'raw' as const, label: t('marketplace.gradingRaw') },
-                        { id: 'graded' as const, label: t('marketplace.gradingGraded') },
-                    ]).map(({ id, label }) => (
-                        <FilterChip
-                            key={id}
-                            label={label}
-                            active={grading.grading === id}
-                            tone="green"
-                            small
-                            onClick={() => setGrading(id === 'graded' ? { ...grading, grading: 'graded' } : { ...NO_GRADING_FILTER, grading: id })}
-                        />
-                    ))}
-                    {grading.grading === 'graded' && (
-                        <>
-                            <span className="w-px h-4 bg-white/10 mx-1" aria-hidden="true"></span>
-                            <FilterChip
-                                label={t('marketplace.anyCompany')}
-                                active={!grading.gradingCompany}
-                                tone="green"
-                                small
-                                onClick={() => setGrading({ ...grading, gradingCompany: '' })}
-                            />
-                            {LISTING_GRADING_COMPANIES.map((company) => (
-                                <FilterChip
-                                    key={company}
-                                    label={company}
-                                    active={grading.gradingCompany === company}
-                                    tone="green"
-                                    small
-                                    onClick={() => setGrading({ ...grading, gradingCompany: company })}
-                                />
-                            ))}
-                            <span className="w-px h-4 bg-white/10 mx-1" aria-hidden="true"></span>
-                            <FilterChip
-                                label={t('marketplace.anyGrade')}
-                                active={grading.minGrade === 0}
-                                tone="green"
-                                small
-                                onClick={() => setGrading({ ...grading, minGrade: 0 })}
-                            />
-                            {MIN_GRADE_OPTIONS.map((g) => (
-                                <FilterChip
-                                    key={g}
-                                    label={minGradeLabel(g)}
-                                    active={grading.minGrade === g}
-                                    tone="green"
-                                    small
-                                    onClick={() => setGrading({ ...grading, minGrade: g })}
-                                />
-                            ))}
-                        </>
+            <div>
+                <h1 className="text-2xl font-black text-white">{t('desktop.marketplaceTitle')}</h1>
+                <p className="text-sm text-slate-400 mt-1">
+                    {q ? (
+                        <>{t('desktop.resultsFor')} <span className="text-white font-bold">&ldquo;{q}&rdquo;</span></>
+                    ) : (
+                        t('desktop.liveListings')
                     )}
-                </div>
-            )}
+                </p>
+            </div>
+
+            <MarketplaceFilterBar filters={filters} setFilters={setFilters} offersEnabled={OFFERS_ENABLED} />
 
             {loading ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 mt-8">
@@ -393,6 +229,14 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
                     </div>
                     <h2 className="text-white font-bold uppercase tracking-widest text-sm mb-1">{t('desktop.noListingsTitle')}</h2>
                     <p className="text-slate-500 text-sm">{t('desktop.noListingsDesc')}</p>
+                    {activeFilterCount > 0 && (
+                        <button
+                            onClick={clearAllFilters}
+                            className="mt-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold px-5 py-2 rounded-xl transition-colors"
+                        >
+                            {t('marketplace.clearFilters')}
+                        </button>
+                    )}
                     {catalogMatches.length > 0 && (
                         <div className="mt-8 text-left max-w-md mx-auto">
                             <p className="text-slate-300 text-sm font-bold mb-1">{t('searchFallback.title').replace('{q}', q.trim())}</p>
@@ -472,32 +316,6 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
 
             <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} contextMessage={t('authGate.watch')} />
         </div>
-    );
-}
-
-function FilterChip({
-    label,
-    active,
-    onClick,
-    tone = 'cyan',
-    small,
-}: {
-    label: string;
-    active: boolean;
-    onClick: () => void;
-    tone?: 'cyan' | 'green';
-    small?: boolean;
-}) {
-    const activeClass = tone === 'green' ? 'bg-brand-green text-brand-darker' : 'bg-brand-cyan text-brand-darker';
-    return (
-        <button
-            onClick={onClick}
-            className={`rounded-full font-bold transition-colors ${small ? 'px-3 py-1 text-[11px]' : 'px-4 py-1.5 text-xs'} ${
-                active ? activeClass : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
-            }`}
-        >
-            {label}
-        </button>
     );
 }
 

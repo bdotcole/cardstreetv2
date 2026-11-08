@@ -17,6 +17,12 @@
  * standalone page. Everything here is server-reachable and renders on its own,
  * with the Android back button returning to the shell.
  *
+ * Every page listed here draws under the Android status bar (the WebView
+ * overlays it on every page, and the shell that pads for it is gone after the
+ * navigation). app/layout.tsx sets the --sat / --sab floors for the app's UA
+ * before first paint; a page added here must pad its own top edge by
+ * var(--sat) (the desktop shell's header does, as do the standalone routes).
+ *
  * Pure module (no next/* or @capacitor/* imports) so the client shell can
  * import it freely.
  */
@@ -85,8 +91,12 @@ const EXACT_PATHS = new Set([
  * with the app installed fires appUrlOpen and nothing else, so without this
  * entry the link a seller sent to chase payment silently lands the buyer on the
  * SPA home — the exact failure /become-a-breaker had.
+ *
+ * /wishlist/<token> is a shared wishlist (the holiday gift-hint link). Served
+ * to the native app as the same server page every browser gets (middleware's
+ * WISHLIST_SHARE_RE), since the SPA has no view for someone else's list.
  */
-const PREFIX_PATHS = ['/card/', '/pay/']
+const PREFIX_PATHS = ['/card/', '/pay/', '/wishlist/']
 
 /**
  * Strip a locale prefix so /en/faq matches the same entry as /faq. The lookahead

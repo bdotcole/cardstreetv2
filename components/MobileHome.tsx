@@ -660,6 +660,7 @@ export default function HomePage() {
     // Supabase hooks for data management
     const {
         collections: customCollections,
+        orphanListings,
         isLoading: collectionsLoading,
         addCollection,
         deleteCollection,
@@ -675,8 +676,8 @@ export default function HomePage() {
     // the mobile app's only listings-of-mine surface. The cron's candidate
     // query is the authoritative zero-listings check; this only gates a banner.
     const hasAnyListing = useMemo(
-        () => customCollections.some((col) => col.items.some((item) => item.isListing)),
-        [customCollections],
+        () => orphanListings.length > 0 || customCollections.some((col) => col.items.some((item) => item.isListing)),
+        [customCollections, orphanListings],
     );
     const showFirstListingPrompt =
         firstListingEligible &&
@@ -840,6 +841,11 @@ export default function HomePage() {
                         // reports env(safe-area-inset-*) as 0 — so keep hardcoded floors.
                         // max() lets the real inset win on devices that do report it
                         // (3-button navigation is ~48px, taller than the 24px floor).
+                        // app/layout.tsx applies the same floors inline before first
+                        // paint on every page (keyed on the UA marker), so the pages
+                        // the shell navigates to as real URLs get them too; this is
+                        // the platform-detected belt to that UA-sniffed suspender.
+                        // Change the two together.
                         document.documentElement.style.setProperty('--sab', 'max(24px, env(safe-area-inset-bottom, 0px))');
                         document.documentElement.style.setProperty('--sat', 'max(44px, env(safe-area-inset-top, 0px))');
                     }
@@ -2129,9 +2135,15 @@ export default function HomePage() {
             }
 
             await fetchGlobalListings();
-            // listingPrice is derived from the listings table; merge locally
-            // so the Vault reflects the new ask without a full reload.
-            await updateCollectionItem(colId, item.id, { listingPrice: price });
+            if (colId) {
+                // listingPrice is derived from the listings table; merge locally
+                // so the Vault reflects the new ask without a full reload.
+                await updateCollectionItem(colId, item.id, { listingPrice: price });
+            } else {
+                // An item-less entry (see OrphanListing) has nothing local to
+                // merge into; re-derive it from the DB.
+                await refreshCollections();
+            }
             showToast(t('vault.priceUpdated'), 'success');
         } catch (error) {
             console.error('Failed to update listing price:', error);
@@ -2139,6 +2151,30 @@ export default function HomePage() {
             // by the database; say so rather than "update failed".
             showToast(
                 error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('vault.priceUpdateFailed'),
+                'error',
+            );
+            throw error;
+        }
+    };
+
+    // Copies on the market for one Vault listing entry (the Quantity control).
+    // The rows themselves change (createListing's N-rows model), so the Vault
+    // re-derives its entries from the DB afterwards instead of patching a count.
+    const handleUpdateListingUnits = async (_colId: string, item: UserCollectionItem, card: Card, units: number) => {
+        try {
+            const result = await marketplaceService.setListingUnitsForCard(card.id, item.condition, units);
+            if (result === null) {
+                // Sold/cancelled while editing — re-derive so the stale entry drops out.
+                await refreshCollections();
+                throw new Error('Listing no longer active');
+            }
+            await fetchGlobalListings();
+            await refreshCollections();
+            showToast(t('vault.quantityUpdated'), 'success');
+        } catch (error) {
+            console.error('Failed to update listing quantity:', error);
+            showToast(
+                error instanceof ListingPhotosRequiredError ? t('listingPhotos.photosRequired') : t('vault.quantityUpdateFailed'),
                 'error',
             );
             throw error;
@@ -2344,6 +2380,24 @@ export default function HomePage() {
                         // page itself falls back to a browser handoff if capture
                         // ever fails — so a scan stays in-app instead of bouncing.
                         window.location.href = appLink.pathname + appLink.search + appLink.hash;
+                        return;
+                    }
+                } catch { /* not a parseable URL — fall through */ }
+
+                // Card page App Link (cardstreet.app/card/<id>): the wishlist
+                // alert email's button and any shared card link. Android
+                // intercepts all cardstreet.app URLs, so the tap opened the app
+                // here and, with no branch, dropped the path: the user landed
+                // wherever the shell last sat (the Vault, after a wishlist
+                // alert) with no card open. The web middleware turns /card/<id>
+                // into the ?card= deep link for phones; do the same here, so
+                // the mount-time handler fetches the card and opens its detail
+                // view with the listings.
+                try {
+                    const appLink = new URL(data.url);
+                    const cardMatch = appLink.pathname.match(/^\/(?:en\/|th\/)?card\/([^/]+)\/?$/i);
+                    if (appLink.protocol.startsWith('http') && cardMatch) {
+                        window.location.href = `/?card=${encodeURIComponent(decodeURIComponent(cardMatch[1]))}`;
                         return;
                     }
                 } catch { /* not a parseable URL — fall through */ }
@@ -2844,6 +2898,8 @@ export default function HomePage() {
                                 onListCard={handleStartListing}
                                 onRemoveListing={handleRemoveListing}
                                 onUpdateListingPrice={handleUpdateListingPrice}
+                                onUpdateListingUnits={handleUpdateListingUnits}
+                                orphanListings={orphanListings}
                                 listingTarget={listingTarget}
                                 onCancelListing={() => setListingTarget(null)}
                                 onPublishListing={handlePublishListing}

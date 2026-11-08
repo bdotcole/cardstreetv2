@@ -13,6 +13,7 @@ import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'reac
 import OfferModal from './OfferModal';
 import GradedSlabFrame from './GradedSlabFrame';
 import { ListingWatchButton } from './ListingWatchBadge';
+import SellerAvatar from './SellerAvatar';
 
 // Gallery slide with pinch/double-tap zoom. One-finger drag is left to the
 // scroll-snap gallery until the image is actually zoomed in — otherwise the
@@ -348,7 +349,12 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({
                             className="w-full px-5 py-4 border-t border-white/5 flex items-center gap-4 text-left group active:bg-white/[0.03] transition-colors"
                         >
                             <div className="w-11 h-11 rounded-xl bg-slate-800 overflow-hidden border border-white/10 group-hover:border-brand-cyan transition-colors shrink-0">
-                                <Image src={listing.seller.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=seller"} alt="Seller Avatar" width={44} height={44} className="w-full h-full object-cover" />
+                                <SellerAvatar
+                                    src={listing.seller.avatar_url}
+                                    seed={listing.seller.id || sellerId}
+                                    name={listing.seller.display_name}
+                                    className="w-full h-full object-cover"
+                                />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{isThai ? 'ผู้ขาย' : 'Seller'}</p>

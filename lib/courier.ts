@@ -335,31 +335,73 @@ function emailPlusPushContent(c: {
  * parcel. Exported so a zero-impact render check (undeliverable recipient +
  * GET /messages/{id}/output) can send exactly what production sends.
  */
-export function soldNotificationContent(totalAmount: number, orderId: string) {
+/** The card a sale notification names, from the listing's card_data snapshot. */
+export interface SoldItemSummary {
+    name: string;
+    set?: string | null;
+    number?: string | null;
+    language?: string | null;
+    /** Further cards in the same sale beyond the one named. */
+    more?: number;
+}
+
+const SOLD_LANGUAGE_WORD: Record<string, { th: string; en: string }> = {
+    th: { th: 'ภาษาไทย', en: 'Thai' },
+    en: { th: 'ภาษาอังกฤษ', en: 'English' },
+    ja: { th: 'ภาษาญี่ปุ่น', en: 'Japanese' },
+    jp: { th: 'ภาษาญี่ปุ่น', en: 'Japanese' },
+};
+
+/**
+ * "N (ภาษาไทย) · 30th CELEBRATION 184/130": the print, not just the name. A
+ * seller who stocks the Thai and the English version of a set could not tell
+ * from "your item has been sold" which one to ship (2026-11-05 support
+ * ticket), and some names are identical on both prints.
+ */
+export function describeSoldItem(item: SoldItemSummary, lang: 'th' | 'en'): string {
+    const word = SOLD_LANGUAGE_WORD[(item.language || '').toLowerCase()]?.[lang];
+    const head = item.name.trim() + (word ? ` (${word})` : '');
+    const number = item.number && !item.number.startsWith('??') ? item.number : null;
+    const where = [item.set, number].filter(Boolean).join(' ');
+    let line = where ? `${head} · ${where}` : head;
+    if (item.more && item.more > 0) line += lang === 'th' ? ` และอีก ${item.more} รายการ` : ` and ${item.more} more`;
+    return line;
+}
+
+export function soldNotificationContent(totalAmount: number, orderId: string, item?: SoldItemSummary | null) {
     const amount = Number(totalAmount || 0).toLocaleString('en-US');
+    const thItem = item?.name ? describeSoldItem(item, 'th') : null;
+    const enItem = item?.name ? describeSoldItem(item, 'en') : null;
+    const langWord = item?.language ? SOLD_LANGUAGE_WORD[item.language.toLowerCase()] : undefined;
     return emailPlusPushContent({
         title: SUBJECTS.sold!,
         emailParagraphs: [
             {
                 text:
-                    `ยินดีด้วย! สินค้าของคุณขายได้แล้วในราคา ${amount} บาท ` +
+                    (thItem
+                        ? `ยินดีด้วย! การ์ด ${thItem} ของคุณขายได้แล้วในราคา ${amount} บาท `
+                        : `ยินดีด้วย! สินค้าของคุณขายได้แล้วในราคา ${amount} บาท `) +
+                    (langWord ? `ผู้ซื้อสั่งการ์ดเวอร์ชัน${langWord.th} กรุณาส่งการ์ดใบนั้น ` : '') +
                     'เปิดแอป Cardstreet ไปที่ รายการรอจัดส่ง แล้วกด "สร้างและพิมพ์ป้ายจัดส่ง" เพื่อสร้างใบปะหน้า Flash Express ' +
                     'หากผู้ซื้อคนเดียวกันมีหลายออเดอร์ คุณสามารถรวมส่งเป็นพัสดุเดียวได้',
             },
             {
                 text:
-                    `Great news! Your item has been sold for ${amount} THB. ` +
+                    (enItem
+                        ? `Great news! Your ${enItem} has been sold for ${amount} THB. `
+                        : `Great news! Your item has been sold for ${amount} THB. `) +
+                    (langWord ? `The buyer ordered the ${langWord.en}-language print, so please ship that one. ` : '') +
                     'Open the Cardstreet app, go to Pending Shipments and tap "Create & print label" to create your Flash Express label. ' +
                     'If the same buyer has several orders, you can combine them into one parcel.',
                 muted: true,
             },
         ],
         cta: { label: 'Create label · สร้างป้ายจัดส่ง', url: `${appBaseUrl()}/orders/${orderId}` },
-        pushBody: `ขายได้ ${amount} บาท — เปิดแอปเพื่อสร้างป้ายจัดส่ง · Open the app to create your shipping label.`,
+        pushBody: `ขายได้ ${amount} บาท${thItem ? ` · ${thItem}` : ''} — เปิดแอปเพื่อสร้างป้ายจัดส่ง · Open the app to create your shipping label.`,
     });
 }
 
-export async function sendSoldNotification(sellerId: string, orderDetails: any) {
+export async function sendSoldNotification(sellerId: string, orderDetails: { id: string; total_amount: number; item?: SoldItemSummary | null }) {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping sold notification'); return; }
     const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
@@ -384,7 +426,7 @@ export async function sendSoldNotification(sellerId: string, orderDetails: any) 
         const sendResult = await courier.send.message({
             message: {
                 to: recipient,
-                content: soldNotificationContent(Number(orderDetails.total_amount) || 0, String(orderDetails.id)),
+                content: soldNotificationContent(Number(orderDetails.total_amount) || 0, String(orderDetails.id), orderDetails.item ?? null),
                 routing,
                 providers: postmarkOverride(SUBJECTS.sold),
                 // Push deep-link payload (read by the mobile FCM handler).
@@ -3367,7 +3409,11 @@ export async function sendSupportReplyNotification(
  */
 export async function sendChatMessageNotification(
     userId: string,
-    msg: { threadId: string; senderName: string; body: string; allowEmail: boolean },
+    msg: {
+        threadId: string; senderName: string; body: string; allowEmail: boolean;
+        /** Where the email button goes instead of the app inbox (the support account answers from /admin). */
+        cta?: { label: string; path: string };
+    },
 ): Promise<{ pushed: boolean; emailed: boolean }> {
     const courier = getCourier();
     if (!courier) return { pushed: false, emailed: false };
@@ -3382,7 +3428,10 @@ export async function sendChatMessageNotification(
     const flat = msg.body.replace(/\s+/g, ' ').trim();
     const pushBody = flat.length > 140 ? `${flat.slice(0, 137)}...` : flat;
     const lines = msg.body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    const url = `${appBaseUrl()}/?tab=messages&thread=${encodeURIComponent(msg.threadId)}&utm_source=courier&utm_medium=email&utm_campaign=chat_message`;
+    const utm = 'utm_source=courier&utm_medium=email&utm_campaign=chat_message';
+    const url = msg.cta
+        ? `${appBaseUrl()}${msg.cta.path}${msg.cta.path.includes('?') ? '&' : '?'}${utm}`
+        : `${appBaseUrl()}/?tab=messages&thread=${encodeURIComponent(msg.threadId)}&${utm}`;
 
     try {
         await courier.send.message({
@@ -3397,7 +3446,7 @@ export async function sendChatMessageNotification(
                         { text: `${name}:`, muted: true },
                         ...lines.map((text) => ({ text })),
                     ],
-                    cta: { label: 'ตอบกลับในแอป · Reply in the app', url },
+                    cta: { label: msg.cta?.label ?? 'ตอบกลับในแอป · Reply in the app', url },
                     emailFooter: 'ชำระเงินผ่าน Cardstreet เท่านั้น การโอนเงินนอกแอปจะไม่ได้รับการคุ้มครอง · Pay only through Cardstreet. Payments made outside the app are not protected.',
                     pushBody,
                 }),

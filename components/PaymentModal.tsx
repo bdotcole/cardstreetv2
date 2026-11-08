@@ -580,6 +580,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     // shown here is the total charged. Silent no-op while the rewards/voucher
     // flags are dark or the buyer has no vouchers. Never combined with an
     // accepted offer.
+    //
+    // A voucher pays at most the cart's platform fee (lib/rewardTiers
+    // voucherDiscountSatang): the catalog minimums are set so every voucher
+    // clears its face at the standard 9% fee, but a partner seller's lower fee
+    // can leave it short. The chip then shows the real figure AND the face it
+    // fell short of, so the buyer decides with the true number in front of
+    // them instead of discovering a smaller discount after paying.
     interface VoucherQuote {
         id: string;
         key: string;
@@ -868,6 +875,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                         >
                                             <i className="fa-solid fa-ticket text-[9px]"></i>
                                             -฿{(v.discountSatang / 100).toLocaleString()}
+                                            {v.discountSatang < v.amountSatang && (
+                                                <span className="font-bold opacity-70">
+                                                    {t('rewards.voucherOfFace').replace('{amount}', (v.amountSatang / 100).toLocaleString())}
+                                                </span>
+                                            )}
                                         </button>
                                     ))}
                                 </div>

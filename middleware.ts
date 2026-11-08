@@ -48,6 +48,21 @@ const SPA_TAB_FOR_PATH: Record<string, string> = {
 // (never redirected — the native shells deep-link here).
 const DESKTOP_WRAPPED_PREFIXES = ['/premium', '/auctions']
 
+// One order, /orders/<id>: the deep-link target of every order email and push.
+// Wrapped like the prefixes above (desktop shell for desktop browsers, the
+// standalone app/orders/[id] page for phones), and checked BEFORE the
+// desktop-only /orders list, whose phone bounce to /?tab=orders would drop
+// the id. The native app never gets here: Android App Links hand the id to
+// the SPA's Profile (components/MobileHome.tsx).
+const ORDER_DETAIL_RE = /^\/orders\/[^/]+$/
+
+// A shared wishlist, /wishlist/<token>: the link a collector sends to whoever
+// is shopping for them. Universal like the public content pages, and served to
+// the native app too: there is no SPA view to bounce to, and the shell's
+// appUrlOpen handler navigates its WebView here (lib/nativeWebPaths.ts). The
+// same HTML for every client, so no Vary: User-Agent.
+const WISHLIST_SHARE_RE = /^\/wishlist\/[^/]+$/
+
 // Same URL, different experience: desktop browsers get the desktop site,
 // phones and the native app get the mobile SPA. The cs_view cookie (set via
 // the ?view= escape hatch below) is a manual override in either direction.
@@ -119,6 +134,16 @@ function resolveExperience(request: NextRequest, basePath: string): Decision {
 
     if (GAME_LANDING_PATHS.includes(basePath)) {
         return { kind: 'rewrite', pathname: `/desktop/games${basePath}`, uaVary: false }
+    }
+
+    if (WISHLIST_SHARE_RE.test(basePath)) {
+        return { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: false }
+    }
+
+    if (ORDER_DETAIL_RE.test(basePath)) {
+        return isDesktopClient(request)
+            ? { kind: 'rewrite', pathname: `/desktop${basePath}`, uaVary: true }
+            : { kind: 'next', uaVary: true }
     }
 
     const desktopOnly = DESKTOP_ONLY_PREFIXES.find((p) => basePath === p || basePath.startsWith(`${p}/`))
@@ -322,8 +347,12 @@ export const config = {
         '/guides/:path*',
         // Seller shop directory (see PUBLIC_CONTENT_PREFIXES).
         '/shops',
+        // Shared wishlists (see WISHLIST_SHARE_RE).
+        '/wishlist/:path*',
         '/sell',
         '/orders',
+        // The order page (see ORDER_DETAIL_RE).
+        '/orders/:path*',
         '/collection',
         '/settings',
         '/premium',

@@ -149,8 +149,15 @@ serve(async (_req) => {
                 // US (legacy separate charges + transfers) we explicitly
                 // transfer (total - platform_fee) from the platform.
                 const totalAmountCents = Math.round((order.total_amount || 0) * 100)
+                // platform_fee is stored ALREADY REDUCED by any Collector Pass
+                // voucher (orders.discount_amount, 20260829_collector_pass_store).
+                // The voucher came out of the platform's fee and the buyer paid
+                // total minus the discount, so the seller's share is total minus
+                // the FULL fee; subtracting only the reduced fee would hand the
+                // seller the voucher a second time on the US transfer path.
                 const platformFeeCents = Math.round((order.platform_fee || 0) * 100)
-                const transferAmountCents = totalAmountCents - platformFeeCents
+                const discountCents = Math.round((order.discount_amount || 0) * 100)
+                const transferAmountCents = totalAmountCents - platformFeeCents - discountCents
 
                 if (transferAmountCents <= 0) {
                     console.warn(`[release-funds] Transfer amount for order ${order.id} is <= 0 (${transferAmountCents}). Skipping.`)

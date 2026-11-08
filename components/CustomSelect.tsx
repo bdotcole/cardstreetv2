@@ -43,6 +43,8 @@ interface CustomSelectProps {
     triggerClassName?: string;
     /** Blocks opening, matching a native select's disabled state. */
     disabled?: boolean;
+    /** Tallest the open list may grow, for a long list that outruns the default. */
+    listMaxHeight?: number;
 }
 
 const DEFAULT_TRIGGER =
@@ -71,6 +73,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     ariaLabel,
     triggerClassName,
     disabled = false,
+    listMaxHeight = PREFERRED_MAX_H,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [pos, setPos] = useState<ListPos | null>(null);
@@ -93,16 +96,16 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
         const spaceBelow = window.innerHeight - r.bottom - GAP - VIEWPORT_MARGIN;
         const spaceAbove = r.top - GAP - VIEWPORT_MARGIN;
-        const openUp = spaceBelow < Math.min(PREFERRED_MAX_H, spaceAbove);
+        const openUp = spaceBelow < Math.min(listMaxHeight, spaceAbove);
         const available = openUp ? spaceAbove : spaceBelow;
 
         setPos({
             left: r.left,
             width: r.width,
             ...(openUp ? { bottom: window.innerHeight - r.top + GAP } : { top: r.bottom + GAP }),
-            maxHeight: Math.max(MIN_MAX_H, Math.min(PREFERRED_MAX_H, available)),
+            maxHeight: Math.max(MIN_MAX_H, Math.min(listMaxHeight, available)),
         });
-    }, []);
+    }, [listMaxHeight]);
 
     // Place before paint so the list never flashes at the wrong spot.
     useLayoutEffect(() => {

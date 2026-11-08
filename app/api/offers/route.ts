@@ -19,6 +19,7 @@ import {
     OFFER_MAX_PENDING_PER_BUYER,
     OFFER_REJECT_COOLDOWN_HOURS,
     OFFER_CREATE_RATE_PER_MIN,
+    isListingGone,
 } from '@/lib/offerPolicy';
 import { sendOfferReceivedNotification } from '@/lib/courier';
 
@@ -242,5 +243,16 @@ export async function GET(req: NextRequest) {
         listing: snapshots.get(o.listing_id) ?? null,
     }));
 
-    return NextResponse.json({ offers: enriched });
+    // "Active" means something the caller can still act on. An offer whose
+    // listing was taken down (or deleted outright) is closed by the hourly
+    // expire-offers sweep, but until that runs the row stayed in the inbox as a
+    // PENDING chip over "this listing is no longer available" and counted
+    // toward the nav badge as needing a response. Hide it here so the list and
+    // the badge agree with what the user can do; the sweep still owns the
+    // status flip and the buyer's notification.
+    const visible = state === 'active'
+        ? enriched.filter((o) => o.listing !== null && !isListingGone(o.listing.status))
+        : enriched;
+
+    return NextResponse.json({ offers: visible });
 }

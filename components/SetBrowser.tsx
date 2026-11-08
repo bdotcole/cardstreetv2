@@ -2,35 +2,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { ApiSet, pokemonService } from '../services/pokemonService';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import Image from 'next/image';
-import { getSetLogoUrl, shouldSkipNextOptimization } from '@/lib/imageUtils';
-
-const ImageFallback = ({ src, alt, tight = false }: { src: string, alt: string, tight?: boolean }) => {
-  const [error, setError] = useState(false);
-
-  if (error) {
-    return (
-      <span className="logo-fallback text-3xl font-black text-slate-500 flex items-center justify-center w-full h-full">
-        {alt.charAt(0)}
-      </span>
-    );
-  }
-
-  // Thai sets use portrait pack art rather than wordmark logos, so render them
-  // edge-to-edge (no inner padding, higher render width) to fill the tile.
-  const logoSrc = getSetLogoUrl(src, tight ? 480 : 300);
-  return (
-    <Image
-      src={logoSrc}
-      alt={alt}
-      fill
-      sizes="150px"
-      className={`object-contain filter drop-shadow-lg ${tight ? '' : 'p-2'}`}
-      unoptimized={shouldSkipNextOptimization(logoSrc)}
-      onError={() => setError(true)}
-    />
-  );
-};
+import SetArtwork from '@/components/SetArtwork';
 
 interface SetBrowserProps {
   region: string;
@@ -304,17 +276,11 @@ const SetBrowser: React.FC<SetBrowserProps> = ({ region, onBack, onSelectSet, ow
                 >
                   <div className={`w-full aspect-square glass rounded-3xl ${isThaiRegion ? 'p-1' : 'p-3'} flex items-center justify-center border-white/5 group-hover:border-brand-cyan/30 group-hover:bg-white/[0.03] transition-all relative overflow-hidden`}>
                     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    {set.images.logo ? (
-                      <div className={`absolute inset-0 ${isThaiRegion ? 'm-1' : 'm-3'} group-hover:scale-110 transition-transform duration-300`}>
-                        <ImageFallback
-                          src={set.images.logo}
-                          alt={set.name}
-                          tight={isThaiRegion}
-                        />
-                      </div>
-                    ) : (
-                      <span className="text-3xl font-black text-slate-500">{set.name.charAt(0)}</span>
-                    )}
+                    {/* Thai sets use portrait pack art rather than wordmark
+                        logos, so they render edge-to-edge to fill the tile. */}
+                    <div className={`absolute inset-0 ${isThaiRegion ? 'm-1' : 'm-3'} group-hover:scale-110 transition-transform duration-300`}>
+                      <SetArtwork set={set} sizes="150px" />
+                    </div>
 
                     {/* Completion Badge (if > 0%) </ */}
                     {completion > 0 && (

@@ -39,9 +39,10 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { useUserSettings } from '@/lib/contexts/UserSettingsContext';
 import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
-import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, type ShipMethod } from '@/lib/orderGroups';
+import OrderCardMeta from './OrderCardMeta';
+import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
 import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
-import { canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
@@ -151,6 +152,8 @@ interface Order {
   created_at: string;
   estimated_delivery: string | null;
   total_amount: number;
+  // Collector Pass voucher taken off this row's charge (lib/orderGroups buyerPaidOf).
+  discount_amount?: number | null;
   delivered_at?: string | null;
   completed_at?: string | null;
   // The buyer's review of this order (one per order), from /api/profile/orders.
@@ -197,6 +200,9 @@ interface Sale {
   id: string;
   total_amount: number;
   platform_fee: number;
+  // Buyer voucher paid out of OUR fee; platform_fee above is stored already
+  // reduced by it (lib/orderGroups sellerNetOf).
+  discount_amount?: number | null;
   status: string;
   transfer_group?: string | null;
   // Only set once an order is completed; null for paid/shipped/etc. Fall back
@@ -395,7 +401,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
   // enabled (then it is the only thing to do), last once the seller is set up.
   // null while the status is loading or failed.
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
-  const [openChat, setOpenChat] = useState<{ threadId: string | null; other?: ChatUser | null } | null>(null);
+  // noShop: the peer is a buyer reached from a parcel card, so the chat header offers no "View shop".
+  const [openChat, setOpenChat] = useState<{ threadId: string | null; other?: ChatUser | null; noShop?: boolean } | null>(null);
   const supabase = createClient();
 
   // Profile data state
@@ -1683,6 +1690,10 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
 
       {/* Slide-in Panels */}
       <AnimatePresence>
+        {/* Every panel ends at the safe-area line (bottom-[var(--sab)]), not
+            the viewport edge. The tab bar is a sibling of <main> painted above
+            these panels, and it ends at that line too: with inset-0 the page
+            scrolled on through the strip under the bar, past the gesture area. */}
         {/* Account Panel */}
         {activePanel === 'account' && (
           <motion.div
@@ -1691,7 +1702,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -1846,7 +1857,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -1984,7 +1995,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2013,7 +2024,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                   // item lines inside a single card with one shared timeline.
                   groupByTransferGroup(orders).map((group) => {
                     const order = group[0];
-                    const groupTotal = group.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                    // What the buyer paid: list prices less their voucher (lib/orderGroups).
+                    const groupTotal = group.reduce((sum, o) => sum + buyerPaidOf(o), 0);
+                    const groupDiscount = group.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
                     return (
                     <div
                       key={order.id}
@@ -2044,23 +2057,54 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                             <p className="text-white font-semibold text-sm truncate">
                               {rowDisplayName(item, t, 'profile.cardOrder')}
                             </p>
-                            <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                            <OrderCardMeta cardData={item.listing?.card_data} condition={item.listing?.condition} />
                             <p className="text-brand-cyan font-bold text-sm mt-1">฿{item.total_amount?.toLocaleString()}</p>
                           </div>
                         </div>
                         );
                       })}
 
-                      {group.length > 1 && (
-                        <div className="flex items-center justify-between border-t border-white/5 pt-3">
-                          <span className="text-slate-500 text-xs">
-                            {isThai ? `${group.length} รายการ · จัดส่งเป็นพัสดุเดียว` : `${group.length} items · ships as one parcel`}
-                          </span>
-                          <span className="text-brand-cyan font-bold text-sm">฿{groupTotal.toLocaleString()}</span>
+                      {/* Footer: the parcel total for a multi-item checkout, and
+                          the voucher line whenever one was used, so the figure
+                          here is the one on the buyer's card statement. */}
+                      {(group.length > 1 || groupDiscount > 0) && (
+                        <div className="border-t border-white/5 pt-3 space-y-1">
+                          {groupDiscount > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 text-xs">{t('rewards.discount')}</span>
+                              <span className="text-amber-300 font-bold text-xs">-฿{groupDiscount.toLocaleString()}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 text-xs">
+                              {group.length > 1
+                                ? (isThai ? `${group.length} รายการ · จัดส่งเป็นพัสดุเดียว` : `${group.length} items · ships as one parcel`)
+                                : (isThai ? 'ยอดที่ชำระ' : 'Paid')}
+                            </span>
+                            <span className="text-brand-cyan font-bold text-sm">฿{groupTotal.toLocaleString()}</span>
+                          </div>
                         </div>
                       )}
 
                       <OrderTrackingTimeline order={order} isThai={isThai} />
+
+                      {/* Order pushes land on this card, not the order page, so
+                          the collection link has to be here too. */}
+                      {cardAddedToCollection(order.status, !!order.break_spot_id) && (
+                        <button
+                          onClick={() => {
+                            setActivePanel('none');
+                            window.dispatchEvent(new Event('cs-open-vault'));
+                          }}
+                          className="w-full flex items-center justify-between gap-3 text-left text-xs font-bold"
+                        >
+                          <span className="min-w-0 text-slate-300">
+                            <CheckCircle className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5 text-brand-green" />
+                            {t('orderActions.addedToCollection')}
+                          </span>
+                          <span className="shrink-0 text-brand-cyan">{t('orderActions.viewCollection')} →</span>
+                        </button>
+                      )}
 
                       {/* Buyer Action required — confirms the whole parcel */}
                       {(order.status === 'shipped' || order.status === 'out_for_delivery' || order.status === 'delivered') && (
@@ -2135,7 +2179,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2172,7 +2216,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <MyLiveShows onBack={() => setActivePanel('none')} />
           </motion.div>
@@ -2186,7 +2230,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2208,7 +2252,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <FollowList
               kind={activePanel}
@@ -2231,7 +2275,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <WatchList
               onBack={() => setActivePanel('none')}
@@ -2255,7 +2299,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2285,7 +2329,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                   // lists its items with a combined net at the foot.
                   groupByTransferGroup(sales).map((group) => {
                     const sale = group[0];
-                    const netFor = (s: Sale) => s.total_amount - (s.platform_fee || 0);
+                    const netFor = (s: Sale) => sellerNetOf(s);
                     const saleDate = new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US');
                     const saleImage = rowDisplayImage(sale);
                     if (group.length === 1) {
@@ -2306,7 +2350,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         <p className="text-white font-semibold text-sm truncate">
                           {rowDisplayName(sale, t, 'profile.cardSale')}
                         </p>
-                        <p className="text-slate-500 text-xs">{sale.listing?.condition}</p>
+                        <OrderCardMeta cardData={sale.listing?.card_data} condition={sale.listing?.condition} />
                       </div>
                       <div className="text-right">
                         <p className="text-brand-green font-bold">+฿{netFor(sale).toLocaleString()}</p>
@@ -2336,7 +2380,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                               <p className="text-white font-semibold text-sm truncate">
                                 {rowDisplayName(item, t, 'profile.cardSale')}
                               </p>
-                              <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                              <OrderCardMeta cardData={item.listing?.card_data} condition={item.listing?.condition} />
                             </div>
                             <p className="text-slate-400 text-xs font-bold">+฿{netFor(item).toLocaleString()}</p>
                           </div>
@@ -2371,7 +2415,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             {/* A flex column so the Stripe card can move by `order` without
                 remounting: it holds onboarding state and listens for the
@@ -2434,6 +2478,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         const pno = shipment.shipping_labels?.[0]?.tracking_number;
                         const checkouts = countCheckouts(group);
                         const buyerName = shipment.buyer?.display_name || null;
+                        const buyerId = shipment.buyer_id || null;
                         // No label yet: the seller mints it here. The buyer's other
                         // unlabelled checkouts can go in the same parcel, and a
                         // parcel Flash has not collected yet can take these cards
@@ -2501,6 +2546,23 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                               {isRealWaybill(pno) && (
                                 <p className="font-mono text-[10px] text-slate-500 truncate">{pno}</p>
                               )}
+                              {/* The seller's way to reach this buyer (which print did you
+                                  order, is the address right) without going through
+                                  support. Either side may start the conversation. */}
+                              {buyerId && viewerId && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenChat({
+                                    threadId: null,
+                                    other: { id: buyerId, username: null, display_name: buyerName || t('parcel.buyer'), avatar_url: null },
+                                    noShop: true,
+                                  })}
+                                  className="mt-1.5 inline-flex items-center gap-1.5 text-brand-cyan text-xs font-bold hover:text-white transition-colors"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  {t('parcel.messageBuyer')}
+                                </button>
+                              )}
                             </div>
                             <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
                               {courierCancelled && (
@@ -2548,7 +2610,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                                     <p className="text-white font-semibold text-sm truncate">
                                       {rowDisplayName(item, t, 'profile.cardOrder')}
                                     </p>
-                                    <p className="text-slate-500 text-xs">{item.listing?.condition}</p>
+                                    <OrderCardMeta cardData={item.listing?.card_data} condition={item.listing?.condition} />
                                     {group.length === 1 && statusLine}
                                   </div>
                                 </div>
@@ -2744,10 +2806,11 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-white font-semibold text-sm truncate">{rowDisplayName(sale, t, 'profile.cardSale')}</p>
+                                <OrderCardMeta cardData={sale.listing?.card_data} />
                                 <p className="text-slate-600 text-[10px]">{new Date(sale.completed_at ?? sale.created_at).toLocaleDateString(isThai ? 'th-TH' : 'en-US')}</p>
                               </div>
                               <div className="text-right shrink-0">
-                                <p className="text-brand-green font-bold text-sm">+฿{(sale.total_amount - (sale.platform_fee || 0)).toLocaleString()}</p>
+                                <p className="text-brand-green font-bold text-sm">+฿{sellerNetOf(sale).toLocaleString()}</p>
                                 <p className={`text-[9px] font-black uppercase tracking-wider ${
                                   stage.tone === 'orange' ? 'text-brand-orange' : stage.tone === 'green' ? 'text-brand-green' : 'text-slate-500'
                                 }`}>
@@ -2798,7 +2861,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 bg-brand-darker z-[200] overflow-y-auto"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] bg-brand-darker z-[200] overflow-y-auto"
           >
             <div className="p-4 pt-16 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
               <div className="flex items-center gap-4 mb-6">
@@ -2856,7 +2919,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[10000] flex flex-col bg-brand-darker"
+            className="fixed inset-x-0 top-0 bottom-[var(--sab)] z-[10000] flex flex-col bg-brand-darker"
           >
             <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
               <h3 className="text-white font-black uppercase tracking-widest text-sm">
@@ -2960,7 +3023,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[10001] flex flex-col bg-brand-darker"
+              className="fixed inset-x-0 top-0 bottom-[var(--sab)] z-[10001] flex flex-col bg-brand-darker"
             >
               <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
                 <h3 className="text-white font-black uppercase tracking-widest text-sm">
@@ -3003,7 +3066,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                         <p className="text-white font-semibold text-sm truncate">
                           {rowDisplayName(trackingOrder, t, 'profile.cardOrder')}
                         </p>
-                        <p className="text-slate-500 text-xs">{trackingOrder.listing?.condition}</p>
+                        <OrderCardMeta cardData={trackingOrder.listing?.card_data} condition={trackingOrder.listing?.condition} />
                         <p className="text-brand-orange font-bold text-sm mt-1">
                           {t('profile.status')}: <span className="uppercase tracking-wider text-[10px]">{t(`profile.status_${trackingOrder.status.toLowerCase()}`) || trackingOrder.status.replace('_', ' ')}</span>
                         </p>
@@ -3125,7 +3188,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
           other={openChat.other}
           viewerId={viewerId}
           onClose={() => setOpenChat(null)}
-          onViewShop={(peer) => {
+          onViewShop={openChat.noShop ? undefined : (peer) => {
             setOpenChat(null);
             setActivePanel('none');
             onOpenSeller?.(peer.id, { display_name: peer.display_name, username: peer.username, avatar_url: peer.avatar_url });

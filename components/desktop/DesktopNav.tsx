@@ -237,7 +237,12 @@ export default function DesktopNav({ pathPrefix = '' }: {
         : `${pathPrefix}/settings?tab=profile`;
 
     return (
-        <header className="sticky top-0 z-50 border-b border-white/5 bg-brand-darker/90 backdrop-blur">
+        // Padded by the top safe-area inset on the header itself, not the page:
+        // the header is sticky, so padding anywhere else would scroll away and
+        // leave it under the Android status bar again (the native app opens
+        // shared wishlists and other real URLs in this shell, drawing under the
+        // status bar; the root layout sets --sat for it). 0 on the web.
+        <header className="sticky top-0 z-50 border-b border-white/5 bg-brand-darker/90 backdrop-blur" style={{ paddingTop: 'var(--sat)' }}>
             <div className="max-w-screen-2xl mx-auto px-4 md:px-8 h-16 flex items-center gap-3 md:gap-8">
                 <Link href={pathPrefix || '/'} className="flex items-center gap-3 shrink-0">
                     <Image src="/logo.png" alt="Cardstreet" width={40} height={40} priority className="object-contain" />

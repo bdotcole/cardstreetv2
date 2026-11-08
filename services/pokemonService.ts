@@ -271,6 +271,9 @@ export interface ApiSet {
     images: {
         symbol: string;
         logo: string;
+        // Booster pack or box photo from the sealed catalog, for sets with no
+        // logo of their own (the set tiles fall through to it).
+        product?: string;
     };
 }
 

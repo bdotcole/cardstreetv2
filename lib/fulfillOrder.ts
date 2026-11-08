@@ -13,6 +13,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
+import type { SoldItemSummary } from '@/lib/courier';
 import {
     sendSoldNotification,
     sendOrderConfirmationNotification,
@@ -163,7 +164,7 @@ export async function fulfillOrdersByTransferGroup(
             .from('orders')
             // listing card_data rides along so the shipment declares the real
             // parcel weight when the order contains sealed products.
-            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, transfer_group, listing:listings(card_data)')
+            .select('id, listing_id, buyer_id, seller_id, status, total_amount, shipping_fee, discount_amount, transfer_group, listing:listings(card_data)')
             .eq('transfer_group', transferGroup)
             .eq('status', 'pending_payment')
             // Defense in depth: live-break spot orders carry break_spot_id and
@@ -349,7 +350,7 @@ export async function fulfillOrdersByTransferGroup(
             if (listingIdsForTransfer.length > 0) {
                 const { data: soldListings } = await supabase
                     .from('listings')
-                    .select('id, seller_id, card_id, card_data, condition, price')
+                    .select('id, seller_id, card_id, card_data, condition, price, is_graded, grading_company, grade')
                     .in('id', listingIdsForTransfer);
 
                 if (soldListings && soldListings.length > 0) {
@@ -373,27 +374,60 @@ export async function fulfillOrdersByTransferGroup(
                     }
 
                     for (const listing of soldListings) {
-                        await supabase.from('collection_items').insert({
+                        const { error: collectionErr } = await supabase.from('collection_items').insert({
                             collection_id: targetCollectionId,
                             card_id: listing.card_id,
                             card_data: listing.card_data,
                             quantity: 1,
                             condition: listing.condition,
                             purchase_price: listing.price,
+                            is_graded: !!listing.is_graded,
+                            grading_company: listing.grading_company ?? null,
+                            grade: listing.grade ?? null,
                         });
+                        // supabase-js returns errors instead of throwing, so the
+                        // catch below would never see this. The order page tells
+                        // the buyer the card is in their collection.
+                        if (collectionErr) {
+                            console.error('[Fulfillment] Collection insert failed (non-fatal):', collectionErr);
+                            result.errors.push(`Collection insert for listing ${listing.id}: ${collectionErr.message}`);
+                        }
 
-                        // Remove a matching copy from the seller's collection,
-                        // if present. Deterministic by id ASC.
+                        // Take one copy out of the seller's collection, if
+                        // present. Deterministic by id ASC. A stack (quantity
+                        // above one) is decremented; a single item is deleted
+                        // only when the seller has no other copy of the card
+                        // still on the market. createListing's quantity puts N
+                        // rows behind ONE vault item, and the mobile Vault's
+                        // Listings view hangs those rows on that item, so
+                        // deleting it at the first sale made the remaining
+                        // copies vanish from the seller's own listings (19
+                        // Thai 30th booster packs, 2026-11-01).
                         const { data: sellerItems } = await supabase
                             .from('collection_items')
-                            .select('id, collections!inner(user_id)')
+                            .select('id, quantity, collections!inner(user_id)')
                             .eq('card_id', listing.card_id)
                             .eq('collections.user_id', listing.seller_id)
                             .order('id', { ascending: true })
                             .limit(1);
 
                         if (sellerItems && sellerItems.length > 0) {
-                            await supabase.from('collection_items').delete().eq('id', sellerItems[0].id);
+                            const sellerItem = sellerItems[0] as { id: string; quantity: number | null };
+                            const quantity = Number(sellerItem.quantity) || 1;
+                            if (quantity > 1) {
+                                await supabase.from('collection_items').update({ quantity: quantity - 1 }).eq('id', sellerItem.id);
+                            } else {
+                                // The sold row is already 'sold', so this counts only the copies still for sale.
+                                const { count: stillListed } = await supabase
+                                    .from('listings')
+                                    .select('id', { count: 'exact', head: true })
+                                    .eq('seller_id', listing.seller_id)
+                                    .eq('card_id', listing.card_id)
+                                    .in('status', ['active', 'draft', 'paused']);
+                                if (!stillListed) {
+                                    await supabase.from('collection_items').delete().eq('id', sellerItem.id);
+                                }
+                            }
                         }
 
                         // OBO Best-Offer (Hook 1): this listing is now a confirmed
@@ -429,7 +463,14 @@ export async function fulfillOrdersByTransferGroup(
         // ─── Step 8: Send notifications ───
         try {
             // Notify buyer
-            const totalAmount = orders.reduce((sum, o) => sum + (o.total_amount || 0) + (o.shipping_fee || 0), 0);
+            // What the buyer actually paid: a Collector Pass voucher comes off
+            // the charge (orders.discount_amount), so the confirmation must
+            // quote the net figure, the one on their card statement. The
+            // seller's "sold for" below stays the list price: the voucher was
+            // paid out of our fee, not theirs.
+            const totalAmount = orders.reduce(
+                (sum, o) => sum + (o.total_amount || 0) + (o.shipping_fee || 0) - (Number(o.discount_amount) || 0), 0,
+            );
             await sendOrderConfirmationNotification(
                 buyerId,
                 // The first order id, never a 'multiple' sentinel: the push
@@ -445,7 +486,7 @@ export async function fulfillOrdersByTransferGroup(
                 const sellerOrders = orders.filter(o => o.seller_id === sellerId);
                 const sellerTotal = sellerOrders.reduce((sum, o) => sum + o.total_amount, 0);
 
-                await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal });
+                await sendSoldNotification(sellerId, { id: sellerOrders[0].id, total_amount: sellerTotal, item: soldItemOf(sellerOrders) });
 
                 // One-time onboarding email on the seller's first-ever sale.
                 // Durably guarded + idempotent (profiles.first_sale_email_sent_at
@@ -471,4 +512,29 @@ export async function fulfillOrdersByTransferGroup(
     }
 
     return result;
+}
+
+/**
+ * The card the seller's "sold" notification names (language, set, number),
+ * read from the orders' embedded listing snapshot. PostgREST returns the
+ * to-one embed as an object; an array is tolerated in case relationship
+ * detection ever changes. Undefined when no row carries a named snapshot
+ * (the notification then falls back to "your item").
+ */
+function soldItemOf(rows: Array<{ listing?: unknown }>): SoldItemSummary | undefined {
+    const snapshotOf = (row: { listing?: unknown }): Record<string, unknown> | null => {
+        const listing = Array.isArray(row.listing) ? row.listing[0] : row.listing;
+        const data = (listing as { card_data?: unknown } | null | undefined)?.card_data;
+        return data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+    };
+    const first = rows.map(snapshotOf).find((c) => c && typeof c.name === 'string' && c.name.trim());
+    if (!first) return undefined;
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    return {
+        name: (first.name as string).trim(),
+        set: str(first.set),
+        number: str(first.number),
+        language: str(first.language),
+        more: rows.length - 1,
+    };
 }

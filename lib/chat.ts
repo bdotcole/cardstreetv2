@@ -30,6 +30,21 @@ export interface ChatMessage {
     createdAt: string;
 }
 
+/** A support-account conversation as the admin console lists it (/api/admin/messages). */
+export interface AdminChatThread {
+    id: string;
+    other: ChatUser;
+    lastMessageAt: string | null;
+    lastMessagePreview: string | null;
+    lastSenderIsSupport: boolean;
+    unread: boolean;
+}
+
+/** A message in an admin-console conversation; fromSupport = sent by the team. */
+export interface AdminChatMessage extends ChatMessage {
+    fromSupport: boolean;
+}
+
 /** A chat suspension in force: until an instant, or for good. */
 export interface ChatBanState {
     until: string | null;
@@ -54,6 +69,8 @@ export const CHAT_OPEN_EVENT = 'cs:openChat';
 export interface ChatOpenDetail {
     user?: ChatUser;
     threadId?: string;
+    /** The peer is a buyer reached from an order, not a shop: no "View shop" in the header. */
+    noShop?: boolean;
 }
 
 /** Fired after sending or reading, so unread badges re-check. */
