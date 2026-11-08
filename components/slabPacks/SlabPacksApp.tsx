@@ -510,7 +510,7 @@ function Lobby({
                     ))}
                 </div>
 
-                {/* What a pack can be: each class with its odds and its price range. Fixed: the same before and after every pull. */}
+                {/* What a pack can be: each stocked class with its odds and its price range. A sold-out class is simply absent, never shown as gone. */}
                 <div className="mt-5 px-5">
                     <div className="flex items-center justify-between">
                         <span className="sp-label">{t('lobby.nextPack')}</span>
@@ -520,7 +520,7 @@ function Lobby({
                         </button>
                     </div>
                     <div className="mt-2.5 grid grid-cols-2 gap-2">
-                        {HIT_ORDER.slice().reverse().map((cls) => (
+                        {HIT_ORDER.filter((cls) => table.byClass[cls].cards > 0).reverse().map((cls) => (
                             <button key={cls} onClick={onOdds} className="sp-card sp-mini rounded-[18px] px-3 py-2.5 text-left">
                                 <div className="flex items-center justify-between gap-2">
                                     <span className="flex min-w-0 items-center gap-2">

@@ -8,12 +8,16 @@
  * inside its class band, the floor holds, the average pull is near the
  * target, the table is deterministic, a draw is deterministic and verifies,
  * a tampered seed or commit fails, and 40k draws land on the published odds.
+ * Then the thin-stock rule: a pool with its chase classes sold out still
+ * builds (their odds fold into the class below and the draws follow), a pool
+ * of floor cards alone is 100% floor, and only an empty floor refuses.
  * Exit 1 on any failure.
  */
 
 import { buildTable, cardAt, commitFor, draw, verifyDraw } from '../lib/slabPacks/engine';
 import { poolForGame } from '../lib/slabPacks/pool';
-import { HIT_CLASSES, HIT_ORDER, LIVE_TIERS, PACK_GAMES, TARGET_EV, TIERS, TIER_ORDER } from '../lib/slabPacks/tiers';
+import { HIT_CLASSES, HIT_ORDER, LIVE_TIERS, PACK_GAMES, TARGET_EV, TIERS, TIER_ORDER, classify } from '../lib/slabPacks/tiers';
+import type { HitClass, PackTable } from '../lib/slabPacks/types';
 
 let failures = 0;
 function check(cond: boolean, msg: string) {
@@ -36,15 +40,17 @@ for (const game of PACK_GAMES) for (const key of LIVE_TIERS) {
     const PREVIEW_POOL = poolForGame(game);
     const table = buildTable(game, tier, PREVIEW_POOL);
     console.log(`${game} ${tier.name} ฿${tier.priceThb.toLocaleString('en-US')}: avg ${pctOf(table.evThb / tier.priceThb)} of price, floor ฿${table.floorThb}, top ฿${table.topThb.toLocaleString('en-US')}, ${table.cards.length} cards`);
-    console.log(`  odds ${HIT_ORDER.map((c) => `${HIT_CLASSES[c].letter} ${pctOf(tier.odds[c])} (${table.byClass[c].cards})`).join(' · ')}`);
+    console.log(`  odds ${HIT_ORDER.map((c) => `${HIT_CLASSES[c].letter} ${pctOf(table.byClass[c].odds)} (${table.byClass[c].cards})`).join(' · ')}`);
 
     const sumClass = HIT_ORDER.reduce((s, c) => s + tier.odds[c], 0);
     check(Math.abs(sumClass - 1) < 1e-9, `class odds sum to ${sumClass}`);
+    // The full preview pool stocks every class, so the published odds are the tier's own.
+    for (const cls of HIT_ORDER) check(table.byClass[cls].odds === tier.odds[cls], `${cls} publishes ${table.byClass[cls].odds}, tier says ${tier.odds[cls]}`);
     const sumCards = table.cards.reduce((s, c) => s + c.odds, 0);
     check(Math.abs(sumCards - 1) < 1e-9, `card odds sum to ${sumCards}`);
     for (const cls of HIT_ORDER) {
         const sum = table.cards.filter((c) => c.cls === cls).reduce((s, c) => s + c.odds, 0);
-        check(Math.abs(sum - tier.odds[cls]) < 1e-9, `${cls} card odds sum to ${sum}, class odds ${tier.odds[cls]}`);
+        check(Math.abs(sum - table.byClass[cls].odds) < 1e-9, `${cls} card odds sum to ${sum}, class odds ${table.byClass[cls].odds}`);
     }
     for (const c of table.cards) {
         const def = HIT_CLASSES[c.cls];
@@ -74,15 +80,59 @@ for (const game of PACK_GAMES) for (const key of LIVE_TIERS) {
     check(cardAt(table, 0).slab.key === table.cards[0].slab.key, 'roll 0 is not the first card');
     check(cardAt(table, 0.999999999).slab.key === table.cards[table.cards.length - 1].slab.key, 'roll ~1 is not the last card');
 
+    drawsFollowOdds(table, `mc-${game}-${key}`, client);
+}
+
+/** 40k draws per table land on the published class odds (4 sigma). */
+function drawsFollowOdds(table: PackTable, seedPrefix: string, client: string) {
     const counts: Record<string, number> = {};
     for (const cls of HIT_ORDER) counts[cls] = 0;
-    for (let i = 0; i < N; i++) counts[draw(table, `mc-${game}-${key}-${i}`, client).cls] += 1;
+    for (let i = 0; i < N; i++) counts[draw(table, `${seedPrefix}-${i}`, client).cls] += 1;
     for (const cls of HIT_ORDER) {
-        const p = tier.odds[cls];
+        const p = table.byClass[cls].odds;
         const freq = counts[cls] / N;
         const sd = Math.sqrt((p * (1 - p)) / N);
         check(Math.abs(freq - p) <= 4 * sd + 1e-9, `${cls} came up ${pctOf(freq)} of ${N} draws against ${pctOf(p)} published`);
     }
+}
+
+// Thin stock (founder's rule, 2026-11-07): a pack pauses only when its floor
+// class is empty. Everything above the floor folds downward when sold out.
+{
+    const tier = TIERS.bronze;
+    const pool = poolForGame('pokemon');
+    const clsOf = (valueThb: number) => classify(valueThb, tier.priceThb);
+    const oddsLine = (table: PackTable) => HIT_ORDER.map((c) => `${HIT_CLASSES[c].letter} ${pctOf(table.byClass[c].odds)} (${table.byClass[c].cards})`).join(' · ');
+
+    const noChase = pool.filter((s) => clsOf(s.valueThb) !== 's' && clsOf(s.valueThb) !== 'ss');
+    const folded = buildTable('pokemon', tier, noChase);
+    console.log(`\nBronze with S and SS sold out: avg ${pctOf(folded.evThb / tier.priceThb)} of price`);
+    console.log(`  odds ${oddsLine(folded)}`);
+    check(folded.byClass.s.odds === 0 && folded.byClass.ss.odds === 0, 'sold-out chase classes still publish odds');
+    check(folded.byClass.s.cards === 0 && folded.byClass.ss.cards === 0 && folded.cards.every((c) => c.cls !== 's' && c.cls !== 'ss'), 'a sold-out class still lists cards');
+    check(Math.abs(folded.byClass.a.odds - (tier.odds.a + tier.odds.s + tier.odds.ss)) < 1e-9, `S and SS did not fold into A (A publishes ${folded.byClass.a.odds})`);
+    check(Math.abs(folded.cards.reduce((s, c) => s + c.odds, 0) - 1) < 1e-9, 'folded card odds do not sum to 1');
+    // The bias search re-targets the average with the folded odds, so it should sit where the full table does.
+    check(Math.abs(folded.evThb / tier.priceThb - TARGET_EV) <= 0.08, `folded average ${pctOf(folded.evThb / tier.priceThb)} is more than 8 points from the ${pctOf(TARGET_EV)} target`);
+    drawsFollowOdds(folded, 'mc-folded', 'client-1');
+
+    // A hole in the middle folds too: no C means C's chance goes to D.
+    const noC = pool.filter((s) => clsOf(s.valueThb) !== 'c');
+    const midFold = buildTable('pokemon', tier, noC);
+    check(midFold.byClass.c.odds === 0 && Math.abs(midFold.byClass.d.odds - (tier.odds.d + tier.odds.c)) < 1e-9, 'an empty C did not fold into D');
+
+    const floorOnly = buildTable('pokemon', tier, pool.filter((s) => clsOf(s.valueThb) === 'd'));
+    console.log(`Bronze with only floor cards left: avg ${pctOf(floorOnly.evThb / tier.priceThb)} of price, ${floorOnly.cards.length} cards, D ${pctOf(floorOnly.byClass.d.odds)}`);
+    check(Math.abs(floorOnly.byClass.d.odds - 1) < 1e-9, 'a floor-only pool is not 100% D');
+    check((HIT_ORDER as readonly HitClass[]).every((c) => c === 'd' || floorOnly.byClass[c].odds === 0), 'a floor-only pool publishes odds above the floor');
+
+    let refused = false;
+    try {
+        buildTable('pokemon', tier, pool.filter((s) => clsOf(s.valueThb) !== 'd'));
+    } catch {
+        refused = true;
+    }
+    check(refused, 'a pool with no floor cards still builds a table');
 }
 
 console.log(failures ? `\n${failures} failure(s)` : '\nall checks passed');

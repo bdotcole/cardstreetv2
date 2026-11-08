@@ -121,7 +121,8 @@ export function OddsSheet({
 
                 <div className="sp-label mt-6">{t('odds.byClass')}</div>
                 <div className="mt-2 overflow-hidden rounded-[20px] border border-white/10">
-                    {[...HIT_ORDER].reverse().map((cls, n) => (
+                    {/* A sold-out class is left out rather than shown at 0%; its chance has folded into the class below. */}
+                    {HIT_ORDER.filter((cls) => table.byClass[cls].cards > 0).reverse().map((cls, n) => (
                         <ClassRow key={cls} cls={cls} tier={tier} table={table} first={n === 0} />
                     ))}
                 </div>

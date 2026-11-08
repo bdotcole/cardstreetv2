@@ -3,10 +3,18 @@
  *
  * The model is FIXED, PUBLISHED ODDS, the way the large digital-pack
  * operators run it. Each tier has a table: every card the pack can contain,
- * each with its own chance, and the chances never move. A pull is one
- * independent draw from that table. Nothing is counted down, nothing is
- * marked as gone, and a buyer sees exactly the same odds before and after
- * anyone else's pull.
+ * each with its own chance. A pull is one independent draw from that table.
+ * The chances do not move between pulls and are the same for every buyer;
+ * they change only when the pool itself changes (a card leaves stock, stock
+ * is added), never because of who is buying. Nothing is counted down and
+ * nothing is marked as gone.
+ *
+ * Only the FLOOR class (the cheapest class the tier gives a chance to, D)
+ * has to be in stock for a pack to be on sale: the founder's rule of
+ * 2026-11-07, "a pulled chase must not pause the pack". An empty class above
+ * the floor hands its chance to the next stocked class below it, so the
+ * published table still sums to 1 and the pack keeps selling until the
+ * floor itself runs dry.
  *
  * Fairness is per pull, commit-then-reveal: before the pack is ripped the
  * buyer is shown a hash of a secret seed; after the reveal the seed itself
@@ -141,7 +149,13 @@ function classWeights(n: number, bias: number): number[] {
 /** How hard to lean cheap, tried in turn; the table nearest TARGET_EV wins. */
 const BIASES = [0, 0.5, 1, 1.6, 2.4, 3.5, 5, 8];
 
-function tableWithBias(game: GameKey, tier: PackTier, byClass: Record<HitClass, Slab[]>, bias: number): PackTable {
+function tableWithBias(
+    game: GameKey,
+    tier: PackTier,
+    byClass: Record<HitClass, Slab[]>,
+    odds: Record<HitClass, number>,
+    bias: number,
+): PackTable {
     const cards: CardOdds[] = [];
     const summary = {} as PackTable['byClass'];
     let ev = 0;
@@ -150,7 +164,7 @@ function tableWithBias(game: GameKey, tier: PackTier, byClass: Record<HitClass, 
 
     for (const cls of HIT_ORDER) {
         const cands = byClass[cls];
-        const clsOdds = tier.odds[cls];
+        const clsOdds = odds[cls];
         const w = classWeights(cands.length, bias);
         const total = w.reduce((s, x) => s + x, 0);
         let mean = 0;
@@ -185,27 +199,57 @@ function tableWithBias(game: GameKey, tier: PackTier, byClass: Record<HitClass, 
     };
 }
 
+/** The cheapest class the tier gives a chance to: the one class that must be in stock. */
+export function floorClass(tier: PackTier): HitClass {
+    const cls = HIT_ORDER.find((c) => tier.odds[c] > 0);
+    if (!cls) throw new Error(`[slabPacks] ${tier.key} gives no class a chance`);
+    return cls;
+}
+
+/**
+ * The tier's odds with every empty class folded into the next stocked class
+ * below it, top down. With the floor stocked nothing is left over, so the
+ * result still sums to 1; this is what the table publishes while a class is
+ * sold out.
+ */
+export function effectiveOdds(tier: PackTier, byClass: Record<HitClass, readonly Slab[]>): Record<HitClass, number> {
+    const out: Record<HitClass, number> = { d: 0, c: 0, b: 0, a: 0, s: 0, ss: 0 };
+    let carry = 0;
+    for (let i = HIT_ORDER.length - 1; i >= 0; i--) {
+        const cls = HIT_ORDER[i];
+        const share = tier.odds[cls] + carry;
+        if (byClass[cls].length > 0) {
+            out[cls] = share;
+            carry = 0;
+        } else {
+            carry = share;
+        }
+    }
+    if (carry > 1e-12) throw new Error(`[slabPacks] ${tier.key} has no stocked class to carry ${carry} of odds`);
+    return out;
+}
+
 /**
  * The published table for a game's tier: every card the pool can put in this
  * pack, each with its exact chance. Deterministic in (tier, pool), so the
  * client and the server compute the same table from the same inputs. Throws
- * when the pool cannot fill a class the odds need, so a tier is never sold
- * with a hole in its table.
+ * only when the floor class is empty: that pack is paused until its floor is
+ * restocked. Any other empty class folds its odds downward (effectiveOdds).
  */
 export function buildTable(game: GameKey, tier: PackTier, pool: readonly Slab[]): PackTable {
     const sum = HIT_ORDER.reduce((s, cls) => s + tier.odds[cls], 0);
     if (Math.abs(sum - 1) > 1e-6) throw new Error(`[slabPacks] ${tier.key} odds sum to ${sum}, not 1`);
 
     const byClass = poolByClass(pool, tier);
-    for (const cls of HIT_ORDER) {
-        if (tier.odds[cls] > 0 && byClass[cls].length === 0) {
-            throw new Error(`[slabPacks] ${game} pool has no ${HIT_CLASSES[cls].letter} slabs for ${tier.key}`);
-        }
+    const floor = floorClass(tier);
+    if (byClass[floor].length === 0) {
+        throw new Error(`[slabPacks] ${game} pool has no ${HIT_CLASSES[floor].letter} cards for ${tier.key}: paused until the floor is restocked`);
     }
+    const odds = effectiveOdds(tier, byClass);
 
     let best: PackTable | null = null;
     for (const bias of BIASES) {
-        const table = tableWithBias(game, tier, byClass, bias);
+        const table = tableWithBias(game, tier, byClass, odds, bias);
         const gap = Math.abs(table.evThb / tier.priceThb - TARGET_EV);
         if (!best || gap < Math.abs(best.evThb / tier.priceThb - TARGET_EV)) best = table;
     }
