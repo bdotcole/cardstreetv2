@@ -11,6 +11,7 @@ import { PHOTOS_REQUIRED_FROM_THB, catalogArtAllowed } from '@/lib/listingPhotoP
 import { UnsupportedPhotoError, normalizeListingPhoto } from '@/lib/listingPhoto';
 import { marketplaceService } from '@/services/marketplaceService';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 import CustomSelect from './CustomSelect';
 import SellerInfoModal from './SellerInfoModal';
 import { getThumbnailUrl } from '@/lib/imageUtils';
@@ -214,8 +215,20 @@ const ListingForm: React.FC<ListingFormProps> = ({ card, initialCondition, initi
         await acceptPhoto(side, blob);
       }
     } catch (e: any) {
-      console.log('Camera error or cancelled:', e);
-      // Fallback to hidden file inputs on web or if camera fails
+      // A seller who backs out of the camera has changed their mind; opening a
+      // picker on top of that was never wanted anywhere.
+      if (/cancel/i.test(String(e?.message ?? e ?? ''))) return;
+      if (Capacitor.isNativePlatform()) {
+        // The gallery is deliberately not an option in the app: a live shot is
+        // the proof that the seller holds the card (see lib/listingPhotoPolicy.ts).
+        // Until 2026-11-08 a camera failure fell through to the hidden file input
+        // and quietly opened the gallery, undoing that rule.
+        console.warn('[ListingForm] Camera failed:', e);
+        setError(t('listingPhotos.cameraFailed'));
+        return;
+      }
+      // A browser has no camera plugin, so the file picker is the only way to
+      // attach a photo on the desktop site.
       if (side === 'front') frontFileInputRef.current?.click();
       if (side === 'back') backFileInputRef.current?.click();
     }
