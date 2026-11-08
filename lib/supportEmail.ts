@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendSupportInboxAlert, sendSupportReplyNotification } from '@/lib/courier';
 import { translateTexts, type Translation } from '@/lib/supportTranslate';
 import { languageName } from '@/lib/languageNames';
+import { supportInboxEmail } from '@/lib/supportAddresses';
 
 /**
  * Support tickets over email (server-only).
@@ -26,9 +27,9 @@ import { languageName } from '@/lib/languageNames';
 
 export type ReplyRole = 'admin' | 'user';
 
-export function supportInboxEmail(): string {
-    return (process.env.SUPPORT_INBOX_EMAIL || 'info@cardstreet.app').trim();
-}
+// The inbox address lives in lib/supportAddresses.ts (no imports there, so
+// courier.ts can read it too); re-exported for the callers that import it here.
+export { supportInboxEmail };
 
 function appBaseUrl(): string {
     return (process.env.NEXT_PUBLIC_APP_URL || 'https://cardstreet.app').replace(/\/+$/, '');
@@ -161,13 +162,28 @@ export async function notifySupportInbox(ticketId: string, event: InboxEvent): P
             .maybeSingle();
         if (!ticket) return;
 
-        const [{ data: profile }, authRes] = await Promise.all([
+        // A buyer's problem report (app/api/orders/[id]/report) is a ticket with
+        // an order behind it. This one email names the order and both parties,
+        // so the team never needed a second alert for it. Fails soft before
+        // migration 20260907_order_disputes.sql.
+        const [{ data: profile }, authRes, disputedRes] = await Promise.all([
             admin.from('profiles').select('display_name, username').eq('id', ticket.user_id).maybeSingle(),
             admin.auth.admin.getUserById(ticket.user_id),
+            admin.from('orders').select('id, total_amount, seller_id').eq('dispute_ticket_id', ticket.id).maybeSingle(),
         ]);
         const customerEmail = authRes.data?.user?.email ?? null;
         const name = profile?.display_name || profile?.username || 'Customer';
         const who = customerEmail ? `${name} <${customerEmail}>` : name;
+        const disputed = disputedRes.error ? null : disputedRes.data;
+        const orderLines: string[] = [];
+        if (disputed) {
+            const { data: seller } = await admin.from('profiles').select('display_name, username').eq('id', disputed.seller_id).maybeSingle();
+            const sellerName = seller?.username || seller?.display_name || disputed.seller_id;
+            orderLines.push(
+                `Problem report on order #${disputed.id.slice(0, 8).toUpperCase()} · ฿${Math.round(Number(disputed.total_amount) || 0).toLocaleString()} · Seller: ${sellerName} · Buyer: ${name}`,
+            );
+            if (event.kind === 'new') orderLines.push("The order is on hold as 'disputed' until the report is closed from the ticket.");
+        }
 
         const text = event.kind === 'new' ? ticket.description : event.message;
         const tr = await translateTexts([
@@ -192,6 +208,7 @@ export async function notifySupportInbox(ticketId: string, event: InboxEvent): P
             ? [
                 `New support ticket from ${who}`,
                 `Category: ${ticket.category} · Opened ${bangkokTime(ticket.created_at)} (Bangkok)`,
+                ...orderLines,
                 '',
                 `Subject: ${enSubject ?? ticket.subject}`,
                 '',
@@ -200,6 +217,7 @@ export async function notifySupportInbox(ticketId: string, event: InboxEvent): P
             : [
                 `${who} replied on ticket #${shortId}${event.via === 'email' ? ' (by email)' : ''}`,
                 `Subject: ${enSubject ?? ticket.subject} · ${bangkokTime(null)} (Bangkok)`,
+                ...orderLines,
                 '',
                 ...translatedBlock('', text, tr.text),
             ];
@@ -208,8 +226,9 @@ export async function notifySupportInbox(ticketId: string, event: InboxEvent): P
             '',
             '----',
             howToAnswer,
-            `Admin console: ${appBaseUrl()}/admin/tickets?ticket=${ticket.id}`,
+            `Admin inbox: ${appBaseUrl()}/admin/inbox?open=ticket:${ticket.id}`,
         );
+        if (disputed) lines.push(`Order in admin: ${appBaseUrl()}/admin/orders?q=${disputed.id}`);
 
         await sendSupportInboxAlert({
             to: supportInboxEmail(),

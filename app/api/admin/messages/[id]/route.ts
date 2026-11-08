@@ -16,27 +16,17 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { requireAdmin, requireAdminUser } from '@/lib/adminAuth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { CHAT_MAX_CHARS, type AdminChatMessage } from '@/lib/chat'
+import { CHAT_MAX_CHARS } from '@/lib/chat'
 import {
     SUPPORT_CHAT_USER_ID, THREAD_COLUMNS, UUID_RE, isMissingSchema, isParticipant, notifyChatRecipient, otherOf, roleOf, type ThreadRow,
 } from '@/lib/chat.server'
-import { loadChatUsers, toAdminThread } from '@/lib/supportChat.server'
+import { loadChatUsers, sendAsSupport, toAdminMessage, toAdminThread, type SupportMessageRow } from '@/lib/supportChat.server'
 
 export const dynamic = 'force-dynamic'
 
 const OPEN_LIMIT = 300
-const PREVIEW_CHARS = 140
 
 type Admin = ReturnType<typeof createAdminClient>
-type MessageRow = { id: string; sender_id: string; body: string; created_at: string }
-
-const toMessage = (m: MessageRow): AdminChatMessage => ({
-    id: m.id,
-    senderId: m.sender_id,
-    body: m.body,
-    createdAt: m.created_at,
-    fromSupport: m.sender_id === SUPPORT_CHAT_USER_ID,
-})
 
 /** The thread, only when the support account is in it; anything else reads as 404. */
 async function loadThread(admin: Admin, id: string): Promise<ThreadRow | NextResponse> {
@@ -44,7 +34,7 @@ async function loadThread(admin: Admin, id: string): Promise<ThreadRow | NextRes
     const { data, error } = await admin.from('chat_threads').select(THREAD_COLUMNS).eq('id', id).maybeSingle<ThreadRow>()
     if (error) {
         if (isMissingSchema(error)) return NextResponse.json({ error: 'Chat is not available yet' }, { status: 503 })
-        console.error('[admin/messages] thread read failed:', error)
+        console.error('[admin/inbox] thread read failed:', error)
         return NextResponse.json({ error: 'Failed to load conversation' }, { status: 500 })
     }
     if (!data || !isParticipant(data, SUPPORT_CHAT_USER_ID)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -70,10 +60,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         : query.order('created_at', { ascending: false }).limit(OPEN_LIMIT)
     const { data: rows, error } = await query
     if (error) {
-        console.error('[admin/messages] messages read failed:', error)
+        console.error('[admin/inbox] messages read failed:', error)
         return NextResponse.json({ error: 'Failed to load messages' }, { status: 500 })
     }
-    const ordered = (rows ?? []) as MessageRow[]
+    const ordered = (rows ?? []) as SupportMessageRow[]
     if (!polling) ordered.reverse()
 
     // Read up to the newest message, written only when something is unread so
@@ -88,7 +78,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const users = await loadChatUsers(admin, [otherOf(thread, SUPPORT_CHAT_USER_ID)])
     return NextResponse.json(
-        { thread: toAdminThread(thread, users), messages: ordered.map(toMessage) },
+        { thread: toAdminThread(thread, users), messages: ordered.map(toAdminMessage) },
         { headers: { 'Cache-Control': 'no-store' } },
     )
 }
@@ -109,30 +99,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const thread = await loadThread(admin, id)
     if (thread instanceof NextResponse) return thread
 
-    const { data: message, error } = await admin
-        .from('chat_messages')
-        .insert({ thread_id: id, sender_id: SUPPORT_CHAT_USER_ID, body })
-        .select('id, sender_id, body, created_at')
-        .single<MessageRow>()
-    if (error || !message) {
-        console.error('[admin/messages] send failed:', error)
-        return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })
-    }
-
-    const flat = body.replace(/\s+/g, ' ')
-    await admin
-        .from('chat_threads')
-        .update({
-            last_message_at: message.created_at,
-            last_message_preview: flat.length > PREVIEW_CHARS ? `${flat.slice(0, PREVIEW_CHARS - 3)}...` : flat,
-            last_sender_id: SUPPORT_CHAT_USER_ID,
-            [roleOf(thread, SUPPORT_CHAT_USER_ID) === 'buyer' ? 'buyer_last_read_at' : 'seller_last_read_at']: message.created_at,
-        })
-        .eq('id', id)
-
-    // The message row only records the shop; the log says which admin wrote it.
-    console.info(`[admin/messages] ${gate.user.id} replied in thread ${id} (message ${message.id})`)
+    const message = await sendAsSupport(admin, thread, body, gate.user.id)
+    if (!message) return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })
     after(() => notifyChatRecipient(id, SUPPORT_CHAT_USER_ID, body))
 
-    return NextResponse.json({ message: toMessage(message) })
+    return NextResponse.json({ message })
 }

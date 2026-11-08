@@ -2,6 +2,7 @@ import CourierClient from "@trycourier/courier";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_LABELS } from "./breakerApplication";
 import { unsubscribeUrl } from "./unsubscribeToken";
+import { customerSupportEmail, founderAlertEmail, supportInboxEmail } from "./supportAddresses";
 
 // Lazy-initialized Courier client. We can't construct at module load because
 // any importing route would crash during `next build` page-data collection if
@@ -1185,7 +1186,7 @@ export async function sendPartnerActivatedNotification(partner: {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping partner-activated alert'); return; }
 
-    const to = (process.env.PARTNER_ACTIVATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    const to = (process.env.PARTNER_ACTIVATION_NOTIFY_EMAIL || founderAlertEmail()).trim();
     if (!to) return;
 
     const joinLink = partner.slug ? `${appBaseUrl()}/join/${partner.slug}` : null;
@@ -1554,7 +1555,7 @@ export async function sendStripeSetupReminderEmail(
         // ── 5. Send. Roll the claim back on failure so a later run retries. ──
         const touch = touchesSent + 1;
         const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = customerSupportEmail();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
         const { title, thBody, enBody, pushBody } = stripeNudgeCopy(touch, firstName);
 
@@ -1700,7 +1701,7 @@ export async function sendFirstListingNudgeEmail(
 
         // ── 4. Send. Roll the claim back on failure so a later run retries. ──
         const vaultUrl = `${appBaseUrl()}/?view=vault`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = customerSupportEmail();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
         const title = 'บัญชีพร้อมขายแล้ว — You\'re verified, list your first card';
 
@@ -1868,7 +1869,7 @@ export async function sendAbandonedCheckoutNudge(
         const cardId: string | null = listing.card_id ?? null;
         const cardName = ((listing.card_data as any)?.name || '').toString().trim() || 'the card';
         const cardUrl = cardId ? `${appBaseUrl()}/card/${cardId}` : `${appBaseUrl()}/`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = customerSupportEmail();
 
         const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
         const routing = buildRouting(wantEmail, wantPush, 'inline');
@@ -3182,7 +3183,7 @@ export async function sendBreakerApplicationAlert(application: {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping breaker-application alert'); return; }
 
-    const to = (process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    const to = (process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || founderAlertEmail()).trim();
     if (!to) return;
 
     const submittedAt = new Date().toLocaleString('en-US', {
@@ -3234,67 +3235,6 @@ export async function sendBreakerApplicationAlert(application: {
         );
     } catch (error) {
         console.error(`[Courier] ❌ Error sending 'Breaker Application' alert for ${application.email}:`, error);
-    }
-}
-
-// ─── Founder alert: buyer reported a problem with an order ───────────────────
-
-/**
- * Sent from /api/orders/[id]/report the moment a buyer opens a problem report.
- * The order is already 'disputed' and the ticket already filed when this runs;
- * this is the page to the founder, who decides the outcome under the Cardstreet
- * Guarantee (refund from platform funds, ban if warranted). English-only,
- * internal. Best-effort, never throws.
- */
-export async function sendOrderDisputeAlert(report: {
-    orderId: string;
-    shortId: string;
-    reason: string;
-    details: string;
-    itemName: string;
-    amountThb: number;
-    buyer: string;
-    seller: string;
-    ticketId: string | null;
-}): Promise<void> {
-    const courier = getCourier();
-    if (!courier) { console.warn('[Courier] Client not initialized — skipping order-dispute alert'); return; }
-
-    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
-    if (!to) return;
-
-    const openedAt = new Date().toLocaleString('en-US', {
-        timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short',
-    });
-    const lines = [
-        `Order: #${report.shortId} (${report.orderId})`,
-        report.itemName ? `Item: ${report.itemName}` : null,
-        `Amount: ฿${Math.round(report.amountThb).toLocaleString()}`,
-        `Buyer: ${report.buyer}`,
-        `Seller: ${report.seller}`,
-        `Reason: ${report.reason}`,
-        report.details ? `Details: ${report.details}` : null,
-        `Opened: ${openedAt} (Bangkok)`,
-        '',
-        `Ticket: ${appBaseUrl()}/admin/tickets`,
-        `Order: ${appBaseUrl()}/orders/${report.orderId}`,
-    ].filter((l) => l !== null) as string[];
-
-    try {
-        await courier.send.message({
-            message: {
-                to: { email: to },
-                content: {
-                    title: `Problem report on order #${report.shortId}: ${report.reason}`,
-                    body: `A buyer reported a problem. The order is on hold as 'disputed' until you resolve the ticket.\n\n${lines.join('\n')}`,
-                },
-                routing: { method: 'all', channels: ['email'] },
-                data: { type: 'order_dispute', orderId: report.orderId, ticketId: report.ticketId ?? '' },
-            },
-        });
-        console.log(`[Courier] ✅ Order-dispute alert sent for #${report.shortId} → ${to}`);
-    } catch (error) {
-        console.error(`[Courier] ❌ Error sending order-dispute alert for #${report.shortId}:`, error);
     }
 }
 
@@ -3413,12 +3353,16 @@ export async function sendChatMessageNotification(
         threadId: string; senderName: string; body: string; allowEmail: boolean;
         /** Where the email button goes instead of the app inbox (the support account answers from /admin). */
         cta?: { label: string; path: string };
+        /** Send the email here instead of the user's own address (the support account's alerts go to the team inbox). */
+        emailTo?: string;
     },
 ): Promise<{ pushed: boolean; emailed: boolean }> {
     const courier = getCourier();
     if (!courier) return { pushed: false, emailed: false };
 
-    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const ctx = await getUserNotifContext(userId);
+    const { fcmToken, prefs } = ctx;
+    const email = msg.emailTo?.trim() || ctx.email;
     const wantPush = !!fcmToken && prefs.chat_push !== false;
     const wantEmail = msg.allowEmail && !!email && prefs.chat_email !== false;
     if (!wantPush && !wantEmail) return { pushed: false, emailed: false };
@@ -3525,13 +3469,17 @@ export async function sendShipReminderNotification(
     }
 }
 
-/** Pages the founder when a paid parcel has not moved for 72 hours. */
+/**
+ * Pages the support inbox when a paid parcel has not moved for 72 hours.
+ * Links the order in the admin lookup (/admin/orders), where the seller's
+ * and buyer's contact details are, so whoever reads the inbox can act.
+ */
 export async function sendUnshippedOrderAlert(alert: {
     orderId: string; shortId: string; seller: string; buyer: string; hoursSincePaid: number; itemName: string;
 }): Promise<void> {
     const courier = getCourier();
     if (!courier) return;
-    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    const to = supportInboxEmail();
     if (!to) return;
     const lines = [
         `Order: #${alert.shortId} (${alert.orderId})`,
@@ -3540,7 +3488,7 @@ export async function sendUnshippedOrderAlert(alert: {
         `Buyer: ${alert.buyer}`,
         `Paid: ${alert.hoursSincePaid} hours ago, still not shipped (two seller reminders sent)`,
         '',
-        `Order: ${appBaseUrl()}/orders/${alert.orderId}`,
+        `Order in admin: ${appBaseUrl()}/admin/orders?q=${alert.orderId}`,
     ].filter((l) => l !== null) as string[];
     try {
         await courier.send.message({
@@ -3548,7 +3496,7 @@ export async function sendUnshippedOrderAlert(alert: {
                 to: { email: to },
                 content: {
                     title: `Unshipped order #${alert.shortId}: ${alert.hoursSincePaid}h since payment`,
-                    body: `A paid order has not moved for three days. The buyer can report it under the guarantee; you may want to reach the seller first.\n\n${lines.join('\n')}`,
+                    body: `A paid order has not moved for three days. Reach the seller first (their phone and email are on the order in admin); the buyer can report it under the guarantee.\n\n${lines.join('\n')}`,
                 },
                 routing: { method: 'all', channels: ['email'] },
                 data: { type: 'unshipped_order', orderId: alert.orderId },
@@ -3603,7 +3551,7 @@ export async function sendBreakerApplicationConfirmation(applicant: {
     const to = applicant.email.trim();
     if (!to) return false;
 
-    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+    const supportEmail = customerSupportEmail();
     // First name only: "Somchai Tanaka" -> "Somchai". Falls back to no greeting
     // name rather than printing an empty string.
     const firstName = applicant.fullName.trim().split(/\s+/)[0] || '';
