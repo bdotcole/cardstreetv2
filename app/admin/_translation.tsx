@@ -119,8 +119,18 @@ function chunk(items: { id: string; text: string }[]) {
 const AUTO_TRANSLATE_KEY = 'cs_admin_auto_translate'
 
 /**
+ * Whether the inbox offers automatic translation at all. Off since 2026-11-08
+ * (founder: "just remove the auto translate for now") while the Gemini billing
+ * is sorted out: nothing is translated unless someone presses a Translate
+ * link, and the switch is hidden. Flip to true to bring the switch back; the
+ * per-browser choice is still remembered underneath.
+ */
+export const AUTO_TRANSLATE_AVAILABLE = false
+
+/**
  * The inbox's auto-translate switch, remembered per browser. null until the
- * saved choice is read, so nothing is translated before it is known.
+ * saved choice is read, so nothing is translated before it is known. Always
+ * off while AUTO_TRANSLATE_AVAILABLE is false.
  */
 export function useAutoTranslate(): [boolean | null, (on: boolean) => void] {
     const [on, setOn] = useState<boolean | null>(null)
@@ -133,6 +143,7 @@ export function useAutoTranslate(): [boolean | null, (on: boolean) => void] {
         setOn(value)
         try { window.localStorage.setItem(AUTO_TRANSLATE_KEY, value ? '1' : '0') } catch { /* private window */ }
     }, [])
+    if (!AUTO_TRANSLATE_AVAILABLE) return [false, set]
     return [on, set]
 }
 

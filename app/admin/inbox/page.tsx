@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     inboxKey, parseInboxKey, personName, type InboxItem, type InboxKind, type InboxPerson,
 } from '@/lib/supportInbox'
-import { TranslationStatusNotice, useAutoTranslate, useTranslator } from '../_translation'
+import { AUTO_TRANSLATE_AVAILABLE, TranslationStatusNotice, useAutoTranslate, useTranslator } from '../_translation'
 import { AccountDrawer } from '../_AccountDrawer'
 import { KindChip, Spinner, StatusChip, initials, when } from './_parts'
 import { DmPane } from './_DmPane'
@@ -174,20 +174,22 @@ export default function SupportInboxPage() {
                             {loading ? 'Loading…' : `${needsReply} need${needsReply === 1 ? 's' : ''} a reply`}
                         </p>
                     </div>
-                    <button
-                        role="switch"
-                        aria-checked={auto === true}
-                        disabled={auto === null}
-                        onClick={() => setAuto(!auto)}
-                        title="Show customer messages in English, and send replies in their language with your English underneath"
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-50"
-                    >
-                        <i className="fa-solid fa-language text-slate-400" />
-                        <span className="text-xs font-bold text-slate-300">Auto-translate</span>
-                        <span className={`relative w-8 h-[18px] rounded-full transition-colors ${auto ? 'bg-brand-cyan' : 'bg-white/15'}`}>
-                            <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${auto ? 'left-[16px]' : 'left-[2px]'}`} />
-                        </span>
-                    </button>
+                    {AUTO_TRANSLATE_AVAILABLE && (
+                        <button
+                            role="switch"
+                            aria-checked={auto === true}
+                            disabled={auto === null}
+                            onClick={() => setAuto(!auto)}
+                            title="Show customer messages in English, and send replies in their language with your English underneath"
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-50"
+                        >
+                            <i className="fa-solid fa-language text-slate-400" />
+                            <span className="text-xs font-bold text-slate-300">Auto-translate</span>
+                            <span className={`relative w-8 h-[18px] rounded-full transition-colors ${auto ? 'bg-brand-cyan' : 'bg-white/15'}`}>
+                                <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${auto ? 'left-[16px]' : 'left-[2px]'}`} />
+                            </span>
+                        </button>
+                    )}
                 </div>
 
                 <TranslationStatusNotice auto={auto === true} />
