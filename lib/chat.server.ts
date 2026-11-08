@@ -2,6 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import { sendChatMessageNotification } from '@/lib/courier';
+import { supportInboxEmail } from '@/lib/supportEmail';
 import type { ChatThreadSummary, ChatUser } from '@/lib/chat';
 import { maskOffPlatform } from '@/lib/chatPolicy';
 
@@ -14,7 +15,7 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 /**
  * The "Cardstreet TCG Marketplace" shop (username `support`) that the team
  * messages sellers and buyers from. Its conversations are read and answered in
- * the admin console (/admin/messages), not by signing in as it.
+ * the admin Support inbox (/admin/inbox), not by signing in as it.
  */
 export const SUPPORT_CHAT_USER_ID =
     (process.env.SUPPORT_CHAT_USER_ID || '').trim() || '6d2609da-db1e-485a-9c8c-85a8e25d876a';
@@ -108,12 +109,15 @@ export async function notifyChatRecipient(threadId: string, senderId: string, bo
 
         const sender = (await fetchPublicSellers(admin, [senderId])).get(senderId);
         const senderName = sender?.display_name || sender?.username || 'Cardstreet';
-        // The support account's inbox is the admin console, so its email
-        // button opens the conversation there.
-        const cta = recipientId === SUPPORT_CHAT_USER_ID
-            ? { label: 'Reply in admin', path: `/admin/messages?thread=${encodeURIComponent(threadId)}` }
-            : undefined;
-        const result = await sendChatMessageNotification(recipientId, { threadId, senderName, body, allowEmail, cta });
+        // The support account is answered from the admin Support inbox: its
+        // alert goes to the team inbox (info@), not the account's own sign-in
+        // address, and the button opens the conversation in admin.
+        const toSupport = recipientId === SUPPORT_CHAT_USER_ID;
+        const result = await sendChatMessageNotification(recipientId, {
+            threadId, senderName, body, allowEmail,
+            cta: toSupport ? { label: 'Reply in admin', path: `/admin/inbox?open=dm:${encodeURIComponent(threadId)}` } : undefined,
+            emailTo: toSupport ? supportInboxEmail() : undefined,
+        });
         if (result.emailed) {
             await admin
                 .from('chat_threads')

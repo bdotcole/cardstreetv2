@@ -24,6 +24,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { trackShipment, mapFlashStateToStatus } from '@/lib/flashExpress';
 import { sendShippedNotification, sendPackageDeliveredNotification } from '@/lib/courier';
 import { embedArray } from '@/lib/utils/embed';
+import { pollExternalTracking, autoCompleteStaleHandoffs } from '@/lib/externalTracking';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -175,5 +176,24 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    return NextResponse.json({ ok: true, ...summary, tookMs: Date.now() - started });
+    // Parcels the seller shipped themselves travel under a number Flash knows
+    // nothing about: ask 17TRACK (a no-op without the API key), then treat the
+    // ones that have gone quiet for AUTO_COMPLETE_AFTER_DAYS as delivered
+    // (lib/externalTracking).
+    let external: Record<string, number> = {};
+    let autoCompleted: Record<string, number> = {};
+    try {
+        external = await pollExternalTracking(supabase, started + TIME_BUDGET_MS);
+    } catch (err) {
+        summary.errors++;
+        console.error('[ReconcileShipments] external tracking poll failed:', err instanceof Error ? err.message : err);
+    }
+    try {
+        autoCompleted = await autoCompleteStaleHandoffs(supabase);
+    } catch (err) {
+        summary.errors++;
+        console.error('[ReconcileShipments] auto-complete failed:', err instanceof Error ? err.message : err);
+    }
+
+    return NextResponse.json({ ok: true, ...summary, external, autoCompleted, tookMs: Date.now() - started });
 }

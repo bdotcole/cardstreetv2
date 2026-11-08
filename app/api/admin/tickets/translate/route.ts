@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/adminAuth'
-import { translateTexts, type TranslateTarget } from '@/lib/supportTranslate'
+import { translateTextsDetailed, type TranslateTarget } from '@/lib/supportTranslate'
 import { NextResponse } from 'next/server'
 
 const TARGETS: TranslateTarget[] = ['en', 'th', 'ja']
@@ -8,8 +8,10 @@ const MAX_TOTAL_CHARS = 40_000
 
 // POST /api/admin/tickets/translate — admin only.
 // Body: { items: [{ id, text }], target?: 'en' | 'th' | 'ja' }
-// Returns { translations: { [id]: { text, sourceLang } | null } }; null means
-// no translation is needed, a missing id means translation failed.
+// Returns { translations: { [id]: { text, sourceLang } | null }, error? }; null
+// means no translation is needed, a missing id means translation failed, and
+// `error` says why the batch failed (billing, quota, no key) so the inbox can
+// tell the team instead of showing originals silently.
 // Admin-gated so it is never an open Gemini proxy.
 export async function POST(request: Request) {
     const gate = await requireAdmin()
@@ -28,6 +30,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'too much text' }, { status: 413 })
     }
 
-    const translations = await translateTexts(items, target)
-    return NextResponse.json({ translations })
+    const { translations, error } = await translateTextsDetailed(items, target)
+    return NextResponse.json(error ? { translations, error } : { translations })
 }

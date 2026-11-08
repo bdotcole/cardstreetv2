@@ -115,6 +115,10 @@
             "schedule": "*/30 * * * *"
         },
         {
+            "path": "/api/cron/cancel-unshipped-orders",
+            "schedule": "50 * * * *"
+        },
+        {
             "path": "/api/cron/recompute-thai-prices",
             "schedule": "45 3 * * *"
         },

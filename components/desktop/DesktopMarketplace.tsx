@@ -92,6 +92,18 @@ export default function DesktopMarketplace({ pathPrefix = '' }: {
         }
     }, [searchParams, router, pathPrefix]);
 
+    // Stripe's default return URL and the payout-setup nudge email both point
+    // at /?stripe_connect=complete|refresh, which the mobile SPA turns into the
+    // payouts panel. On desktop it landed on this homepage and was ignored, so
+    // a seller who finished Stripe's form in a desktop browser saw nothing.
+    // Forward it to the Payouts tab, whose Stripe card reads the param.
+    useEffect(() => {
+        const cn = searchParams?.get('stripe_connect');
+        if (cn === 'complete' || cn === 'refresh') {
+            router.replace(`${pathPrefix}/settings?tab=payouts&stripe_connect=${cn}`);
+        }
+    }, [searchParams, router, pathPrefix]);
+
     // Seeded from the URL (game landing pages link ?game=<id>, and Back from a
     // card page lands on the filters the buyer left). The filter bar owns it
     // from then on and the URL follows it, so a later click is not fought by it.

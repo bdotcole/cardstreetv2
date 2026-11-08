@@ -21,6 +21,27 @@ export interface Translation {
     sourceLang: string;
 }
 
+/**
+ * Why a batch came back untranslated. The admin inbox shows this to the team:
+ * on 2026-11-08 Gemini refused every call with 402 (prepaid credits used up)
+ * and the inbox silently showed originals for hours.
+ */
+export type TranslateErrorCode = 'no_key' | 'billing' | 'rate_limit' | 'unavailable';
+export interface TranslateError { code: TranslateErrorCode; message: string }
+export interface TranslateOutcome {
+    translations: Record<string, Translation | null>;
+    error?: TranslateError;
+}
+
+function classifyGeminiError(e: unknown): TranslateError {
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = typeof (e as { status?: unknown })?.status === 'number' ? (e as { status: number }).status : 0;
+    // The 402 body also says RESOURCE_EXHAUSTED, so billing is checked first.
+    if (status === 402 || /prepayment credits|\b402\b/i.test(msg)) return { code: 'billing', message: 'Gemini prepaid credits are used up' };
+    if (status === 429 || /RESOURCE_EXHAUSTED|rate.?limit|quota|\b429\b/i.test(msg)) return { code: 'rate_limit', message: 'Gemini quota or rate limit reached' };
+    return { code: 'unavailable', message: 'The translation service did not answer' };
+}
+
 // Flash for the same reasons as the scanner and grader: fast, cheap, and the
 // output is short structured JSON where Pro's thinking budget buys nothing.
 const MODEL = 'gemini-2.5-flash';
@@ -98,6 +119,14 @@ export async function translateTexts(
     items: { id: string; text: string }[],
     target: TranslateTarget = 'en',
 ): Promise<Record<string, Translation | null>> {
+    return (await translateTextsDetailed(items, target)).translations;
+}
+
+/** translateTexts plus the reason when Gemini could not be used. */
+export async function translateTextsDetailed(
+    items: { id: string; text: string }[],
+    target: TranslateTarget = 'en',
+): Promise<TranslateOutcome> {
     const out: Record<string, Translation | null> = {};
     const pending: { id: string; text: string; key: string }[] = [];
 
@@ -115,13 +144,15 @@ export async function translateTexts(
         }
         pending.push({ id: item.id, text, key });
     }
-    if (pending.length === 0) return out;
+    if (pending.length === 0) return { translations: out };
 
     const ai = getAi();
     if (!ai) {
         console.warn('[supportTranslate] GEMINI_API_KEY is not set; skipping translation');
-        return out;
+        return { translations: out, error: { code: 'no_key', message: 'GEMINI_API_KEY is not set' } };
     }
+
+    let error: TranslateError | undefined;
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
@@ -149,7 +180,7 @@ export async function translateTexts(
             },
         });
         const parsed: unknown = JSON.parse(response.text || '[]');
-        if (!Array.isArray(parsed)) return out;
+        if (!Array.isArray(parsed)) return { translations: out, error: { code: 'unavailable', message: 'Gemini returned an unexpected answer' } };
 
         const byId = new Map(pending.map((p) => [p.id, p]));
         for (const row of parsed as { id?: unknown; sourceLanguage?: unknown; translation?: unknown }[]) {
@@ -168,8 +199,9 @@ export async function translateTexts(
         }
     } catch (e) {
         console.warn('[supportTranslate] translation failed:', e instanceof Error ? e.message : e);
+        error = classifyGeminiError(e);
     } finally {
         clearTimeout(timer);
     }
-    return out;
+    return error ? { translations: out, error } : { translations: out };
 }

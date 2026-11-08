@@ -43,10 +43,17 @@ import {
 } from '@/lib/flashExpress';
 import { sendLabelGeneratedNotification, sendShippedNotification } from '@/lib/courier';
 import { isRealWaybill, pickupBookedAt, PICKUP_REBOOK_AFTER_MS, type ShipMethod } from '@/lib/orderGroups';
+import { isByHand } from '@/lib/carriers';
+import { registerParcelTracking } from '@/lib/externalTracking';
 
 export const SHIPPING_PROFILE_COLS =
     'id, display_name, phone_number, province, state, district, sub_district, postcode, address';
 export const PENDING_WAYBILL = 'PENDING';
+// shipping_labels.tracking_number for a parcel the seller shipped themselves
+// (shipSelf): no Flash waybill exists, the carrier and number the seller gave
+// sit in the handoff columns, and lib/orderGroups isRealWaybill excludes it so
+// nothing polls Flash for it or offers to print it.
+export const SELF_WAYBILL = 'SELF';
 const CLAIM_STALE_MS = 2 * 60 * 1000;
 // pickup_status while bookPickup is talking to Flash; arbitrates double taps.
 const PICKUP_REQUESTING = 'requesting';
@@ -810,6 +817,107 @@ export async function handOffParcel(
             console.error('[Parcels] handoff shipped notification failed (non-fatal):', (e as Error).message);
         }
     }
+    // Follow the number at the carrier so delivery is detected without the
+    // buyer pressing anything (lib/externalTracking; no-op without 17TRACK).
+    if (moved.length > 0) {
+        await registerParcelTracking(admin, { trackingNumber, carrier, orderIds: moved.map((o) => o.id) });
+    }
     console.log(`[Parcels] ${moved.length} order(s) handed off via ${carrier} by seller ${params.sellerId}`);
     return { ok: true, orderIds: moved.map((o) => o.id), carrier, trackingNumber, recorded };
+}
+
+export type SelfShipResult =
+    | { ok: true; orderIds: string[]; carrier: string; trackingNumber: string | null; tracked: boolean; recorded: boolean }
+    | Fail;
+
+/**
+ * The seller ships the parcel themselves, straight from 'paid': they took the
+ * cards to whatever counter is nearest (a Flash Home, Kerry, J&T, the post
+ * office), paid there, and type in the number the counter gave them. No Flash
+ * waybill is minted. Most Thai sellers already ship this way; forcing them
+ * through our Flash label first produced labels that counters refused and
+ * orders frozen at label_generated (support review 2026-11-08).
+ *
+ * `orderIds` is one parcel: this seller's unlabelled orders for one buyer
+ * (lib loadUnlabelledOrders, the same rule as mintParcel). The claim is the
+ * label rows themselves: a plain insert on the UNIQUE order_id, so a double
+ * tap, or a Create label racing it, gets 409 instead of two labels. Rows
+ * carry SELF_WAYBILL plus the handoff columns, the orders move to 'shipped'
+ * (CAS), the buyer gets the shipped notification naming the carrier, and the
+ * number is registered at 17TRACK so delivery arrives on its own. A tracking
+ * number is required unless the cards were handed over in person.
+ */
+export async function shipSelf(
+    admin: SupabaseClient,
+    params: { sellerId: string; orderIds: string[]; carrier: string; trackingNumber?: string | null; notify?: boolean },
+): Promise<SelfShipResult> {
+    const carrier = params.carrier.replace(/\s+/g, ' ').trim();
+    const trackingNumber = (params.trackingNumber || '').replace(/\s+/g, '').trim() || null;
+    if (!carrier) return fail(400, 'BAD_CARRIER', 'Name the carrier the parcel left with');
+    if (carrier.length > HANDOFF_CARRIER_MAX) return fail(400, 'BAD_CARRIER', 'Carrier name is too long');
+    if (trackingNumber && trackingNumber.length > HANDOFF_TRACKING_MAX) {
+        return fail(400, 'BAD_TRACKING', 'Tracking number is too long');
+    }
+    if (!trackingNumber && !isByHand(carrier)) {
+        return fail(400, 'TRACKING_REQUIRED', 'Enter the tracking number the carrier gave you');
+    }
+
+    const loaded = await loadUnlabelledOrders(admin, params.sellerId, params.orderIds);
+    if (!loaded.ok) return loaded;
+    const { orders, buyerId } = loaded;
+    const orderIds = orders.map((o) => o.id);
+    const now = new Date().toISOString();
+
+    const baseRows = orderIds.map((id) => ({
+        order_id: id,
+        tracking_number: SELF_WAYBILL,
+        carrier_name: carrier,
+        status: 'picked_up',
+        label_url: 'N/A',
+        pickup_status: 'manual',
+        updated_at: now,
+    }));
+    const handoffFields = { handoff_carrier: carrier, handoff_tracking_number: trackingNumber, handed_off_at: now };
+    let recorded = true;
+    let { error: insErr } = await admin.from('shipping_labels').insert(baseRows.map((r) => ({ ...r, ...handoffFields })));
+    if (insErr && isMissingColumn(insErr)) {
+        recorded = false;
+        ({ error: insErr } = await admin.from('shipping_labels').insert(baseRows));
+        Sentry.captureMessage('Self-shipped parcel recorded without carrier: migration 20261016_shipping_label_handoff.sql is not applied', {
+            level: 'warning',
+            tags: { handler: 'parcels', kind: 'self_ship_unrecorded' },
+            extra: { orderIds, carrier, trackingNumber },
+        });
+    }
+    if (insErr) {
+        if (insErr.code === '23505') return fail(409, 'IN_PROGRESS', 'This order already has a label or is being shipped');
+        return fail(500, 'LABEL_WRITE_FAILED', insErr.message);
+    }
+
+    const { data: flipped, error: flipErr } = await admin
+        .from('orders')
+        .update({ status: 'shipped', updated_at: now })
+        .in('id', orderIds)
+        .in('status', LABEL_READY_STATUSES)
+        .select('id');
+    if (flipErr) return fail(500, 'STATUS_FLIP_FAILED', flipErr.message);
+    const flippedIds = new Set((flipped ?? []).map((r: { id: string }) => r.id));
+    const moved = orderIds.filter((id) => flippedIds.has(id));
+    if (moved.length === 0) {
+        // The orders changed under us (a refund, a concurrent label): the rows
+        // we inserted describe nothing, so take them back.
+        await admin.from('shipping_labels').delete().in('order_id', orderIds).eq('tracking_number', SELF_WAYBILL);
+        return fail(409, 'IN_PROGRESS', 'The order changed while you were shipping it; refresh and try again');
+    }
+
+    if (params.notify !== false) {
+        try {
+            await sendShippedNotification(buyerId, { id: moved[0], total_amount: 0 }, trackingNumber || '', { carrier });
+        } catch (e) {
+            console.error('[Parcels] self-ship shipped notification failed (non-fatal):', (e as Error).message);
+        }
+    }
+    const tracked = await registerParcelTracking(admin, { trackingNumber, carrier, orderIds: moved });
+    console.log(`[Parcels] ${moved.length} order(s) self-shipped via ${carrier}${trackingNumber ? ` (${trackingNumber})` : ''} by seller ${params.sellerId}`);
+    return { ok: true, orderIds: moved, carrier, trackingNumber, tracked, recorded };
 }

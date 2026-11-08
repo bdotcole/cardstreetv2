@@ -44,12 +44,20 @@ export interface ParcelGroupableRow extends TransferGroupableRow {
     shipping_labels?: { tracking_number?: string | null }[] | null;
 }
 
+/**
+ * A Flash waybill of ours, as opposed to a placeholder: MANUAL (a region
+ * error, support handles it), PENDING (a claim in flight), N/A, or SELF (the
+ * seller shipped the parcel themselves; the carrier and number live in the
+ * handoff columns, lib/parcels shipSelf). Only a real waybill is polled at
+ * Flash or printed.
+ */
 export function isRealWaybill(trackingNumber: string | null | undefined): trackingNumber is string {
     return (
         !!trackingNumber &&
         trackingNumber !== 'MANUAL' &&
         trackingNumber !== 'N/A' &&
-        trackingNumber !== 'PENDING'
+        trackingNumber !== 'PENDING' &&
+        trackingNumber !== 'SELF'
     );
 }
 

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendOrderDisputeAlert } from '@/lib/courier';
 import { DISPUTE_REASONS, REPORT_WINDOW_DAYS, canReportOrder, type DisputeReason } from '@/lib/orderDisputes';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { notifySupportInbox } from '@/lib/supportEmail';
@@ -16,8 +15,10 @@ import { notifySupportInbox } from '@/lib/supportEmail';
  *   2. Moves the order to status 'disputed'. That status alone halts the money
  *      side: release-funds only selects delivered/completed, and
  *      /api/orders/complete only accepts shipped..delivered.
- *   3. Emails the founder. The seller is not messaged automatically: the founder
- *      decides, with the seller's Stripe-verified identity in hand.
+ *   3. Emails the support inbox once, through the ticket alert, which names the
+ *      order, the seller and the buyer. The seller is not messaged
+ *      automatically: the team decides from the admin inbox, with the seller's
+ *      contact details and Stripe-verified identity on the order lookup.
  *
  * Reportable: shipped, in_transit, out_for_delivery (not received) at any time;
  * delivered or completed within REPORT_WINDOW_DAYS of delivery. Buyer only.
@@ -29,7 +30,7 @@ import { notifySupportInbox } from '@/lib/supportEmail';
 
 type Reason = DisputeReason;
 const REASONS = DISPUTE_REASONS;
-// English labels for the ticket and the founder alert (internal surfaces).
+// English labels for the ticket subject (an internal surface).
 const REASON_LABEL: Record<Reason, string> = {
     not_received: 'Item not received',
     not_as_described: 'Not as described',
@@ -131,29 +132,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ error: 'Order changed while reporting, refresh and try again', code: 'STATE_CHANGED' }, { status: 409 });
     }
 
-    // Best effort: the report is already on file.
-    try {
-        const [{ data: buyer }, { data: seller }] = await Promise.all([
-            admin.from('profiles').select('display_name, username').eq('id', order.buyer_id).maybeSingle(),
-            admin.from('profiles').select('display_name, username').eq('id', order.seller_id).maybeSingle(),
-        ]);
-        await sendOrderDisputeAlert({
-            orderId: id,
-            shortId,
-            reason: REASON_LABEL[reason],
-            details,
-            itemName,
-            amountThb: Number(order.total_amount || 0),
-            buyer: buyer?.username || buyer?.display_name || order.buyer_id,
-            seller: seller?.username || seller?.display_name || order.seller_id,
-            ticketId,
-        });
-    } catch (e) {
-        console.error('[Orders/Report] alert failed:', e);
-    }
-
-    // The ticket also reaches the support inbox like every other ticket, so it
-    // can be answered by email there.
+    // The ticket reaches the support inbox like every other ticket; its alert
+    // reads the dispute columns written above, so it is sent after the update.
     if (ticketId) {
         const filed = ticketId;
         after(() => notifySupportInbox(filed, { kind: 'new' }));

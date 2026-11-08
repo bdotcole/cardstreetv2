@@ -2,6 +2,7 @@ import CourierClient from "@trycourier/courier";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_LABELS } from "./breakerApplication";
 import { unsubscribeUrl } from "./unsubscribeToken";
+import { customerSupportEmail, founderAlertEmail, supportInboxEmail } from "./supportAddresses";
 
 // Lazy-initialized Courier client. We can't construct at module load because
 // any importing route would crash during `next build` page-data collection if
@@ -472,21 +473,21 @@ export interface LabelReadyDetails {
 export function labelReadyNotificationContent(d: LabelReadyDetails) {
     const pno = d.trackingNumber ? ` (${d.trackingNumber})` : '';
     const many = (d.itemCount ?? 1) > 1;
-    const packTh = many ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้า ` : 'แพ็กการ์ด ติดใบปะหน้า ';
-    const packEn = many ? `Pack all ${d.itemCount} cards for this parcel in one envelope and attach the label` : 'Pack the card and attach the label';
+    const packTh = many ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้าที่พิมพ์แล้ว (สาขาไม่รับใบปะหน้าที่โชว์บนมือถือ) ` : 'แพ็กการ์ด ติดใบปะหน้าที่พิมพ์แล้ว (สาขาไม่รับใบปะหน้าที่โชว์บนมือถือ) ';
+    const packEn = many ? `Pack all ${d.itemCount} cards for this parcel in one envelope and attach the printed label (counters refuse a label shown on a phone)` : 'Pack the card and attach the printed label (counters refuse a label shown on a phone)';
     // Say plainly whether a courier is coming: sellers who were never told a
     // pickup had been booked missed the courier, and Flash cancelled it.
     const handoffTh =
         d.shipMethod === 'pickup'
-            ? 'แล้วรอพนักงาน Flash เข้ามารับที่ที่อยู่ในโปรไฟล์ของคุณ ส่วนใหญ่ภายในวันนี้หรือวันทำการถัดไป ถ้าไม่สะดวกรอ นำไปส่งที่สาขา Flash ใดก็ได้โดยใช้ใบปะหน้าเดิม'
+            ? 'แล้วรอพนักงาน Flash เข้ามารับที่ที่อยู่ในโปรไฟล์ของคุณ ส่วนใหญ่ภายในวันนี้หรือวันทำการถัดไป พนักงานจะเก็บค่าส่งตอนรับพัสดุ ถ้าไม่สะดวกรอ นำไปส่งที่สาขา Flash Express โดยตรงโดยใช้ใบปะหน้าเดิม'
             : d.shipMethod === 'dropoff'
-              ? 'แล้วนำไปส่งที่สาขา Flash Express หรือร้าน Flash Home ใดก็ได้ ถ้าต้องการให้พนักงานมารับ กดเรียกพนักงานเข้ารับได้ในแอป'
+              ? 'แล้วนำไปส่งที่สาขา Flash Express โดยตรง ไม่ใช่ร้าน Flash Home (ร้าน Flash Home เคยปฏิเสธใบปะหน้าแบบนี้) รอให้พนักงานสแกนและเก็บใบเสร็จไว้ ถ้าต้องการให้พนักงานมารับ กดเรียกพนักงานเข้ารับได้ในแอป'
               : 'แล้วส่งให้ Flash ตอนมารับหรือนำไปส่งที่สาขา';
     const handoffEn =
         d.shipMethod === 'pickup'
-            ? '. A Flash courier will collect it from the address on your profile, usually today or the next working day. Not home? Drop it at any Flash branch with the same label.'
+            ? '. A Flash courier will collect it from the address on your profile, usually today or the next working day, and collects the shipping fee from you. Not home? Take it to an official Flash Express branch with the same label.'
             : d.shipMethod === 'dropoff'
-              ? ', then drop it at any Flash Express branch or Flash Home shop. Want a courier to collect it instead? Book a pickup in the app.'
+              ? ', then take it to an official Flash Express branch, not a Flash Home shop (they have refused these labels). Watch the staff scan it and keep the receipt. Want a courier to collect it instead? Book a pickup in the app.'
               : ', and hand it to Flash at pickup or at a branch.';
     return emailPlusPushContent({
         title: SUBJECTS.labelGenerated!,
@@ -600,14 +601,14 @@ export function pickupCancelledNotificationContent(d: PickupCancelledDetails) {
                     `Flash Express ยกเลิกการเข้ารับ${parcelTh}${pno} ของคุณแล้ว พนักงานจะไม่มาตามนัดเดิม ` +
                     'ส่วนใหญ่เกิดเพราะพนักงานมาแล้วไม่มีคนอยู่ หรือพัสดุยังไม่พร้อม ใบปะหน้าเดิมยังใช้ได้ ' +
                     'เลือกได้สองทาง: กดเรียกพนักงานเข้ารับใหม่ในแอปเมื่อแพ็กพัสดุเสร็จและมีคนอยู่รับ ' +
-                    'หรือนำพัสดุไปส่งที่สาขา Flash Express หรือร้าน Flash Home ใดก็ได้',
+                    'หรือนำพัสดุไปส่งที่สาขา Flash Express โดยตรง ไม่ใช่ร้าน Flash Home',
             },
             {
                 text:
                     `Flash Express cancelled the courier pickup for ${parcelEn}${pno}. The courier is not coming on that booking; ` +
                     'this usually happens when nobody was home or the parcel was not ready. The label is still valid. ' +
                     'Either book the courier again from the app once the parcel is packed and someone is there, ' +
-                    'or drop it at any Flash Express branch or Flash Home shop.',
+                    'or take it to an official Flash Express branch, not a Flash Home shop.',
                 muted: true,
             },
         ],
@@ -964,8 +965,8 @@ export async function sendPackageDeliveredNotification(buyerId: string, orderId:
                 content: emailPlusPushContent({
                     title,
                     emailParagraphs: [
-                        { text: `Your Flash Express package (${trackingNumber}) has been delivered. Please confirm receipt in the app to release the seller's funds.` },
-                        { text: `พัสดุ Flash Express (${trackingNumber}) ของคุณจัดส่งเรียบร้อยแล้ว — กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย`, muted: true },
+                        { text: `Your parcel (${trackingNumber}) has been delivered. Please confirm receipt in the app to release the seller's funds.` },
+                        { text: `พัสดุ (${trackingNumber}) ของคุณจัดส่งเรียบร้อยแล้ว — กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย`, muted: true },
                     ],
                     cta: { label: 'Confirm receipt · ยืนยันรับสินค้า', url: `${appBaseUrl()}/orders/${orderId}` },
                     pushBody: 'กดยืนยันรับสินค้าในแอปเพื่อปล่อยเงินให้ผู้ขาย · Confirm receipt in the app.',
@@ -1185,7 +1186,7 @@ export async function sendPartnerActivatedNotification(partner: {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping partner-activated alert'); return; }
 
-    const to = (process.env.PARTNER_ACTIVATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    const to = (process.env.PARTNER_ACTIVATION_NOTIFY_EMAIL || founderAlertEmail()).trim();
     if (!to) return;
 
     const joinLink = partner.slug ? `${appBaseUrl()}/join/${partner.slug}` : null;
@@ -1554,7 +1555,7 @@ export async function sendStripeSetupReminderEmail(
         // ── 5. Send. Roll the claim back on failure so a later run retries. ──
         const touch = touchesSent + 1;
         const resumeUrl = `${appBaseUrl()}/?stripe_connect=refresh`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = customerSupportEmail();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
         const { title, thBody, enBody, pushBody } = stripeNudgeCopy(touch, firstName);
 
@@ -1700,7 +1701,7 @@ export async function sendFirstListingNudgeEmail(
 
         // ── 4. Send. Roll the claim back on failure so a later run retries. ──
         const vaultUrl = `${appBaseUrl()}/?view=vault`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = customerSupportEmail();
         const firstName = (profile.display_name || '').trim().split(/\s+/)[0];
         const title = 'บัญชีพร้อมขายแล้ว — You\'re verified, list your first card';
 
@@ -1868,7 +1869,7 @@ export async function sendAbandonedCheckoutNudge(
         const cardId: string | null = listing.card_id ?? null;
         const cardName = ((listing.card_data as any)?.name || '').toString().trim() || 'the card';
         const cardUrl = cardId ? `${appBaseUrl()}/card/${cardId}` : `${appBaseUrl()}/`;
-        const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+        const supportEmail = customerSupportEmail();
 
         const recipient = buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null);
         const routing = buildRouting(wantEmail, wantPush, 'inline');
@@ -3182,7 +3183,7 @@ export async function sendBreakerApplicationAlert(application: {
     const courier = getCourier();
     if (!courier) { console.warn('[Courier] Client not initialized — skipping breaker-application alert'); return; }
 
-    const to = (process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    const to = (process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || founderAlertEmail()).trim();
     if (!to) return;
 
     const submittedAt = new Date().toLocaleString('en-US', {
@@ -3234,67 +3235,6 @@ export async function sendBreakerApplicationAlert(application: {
         );
     } catch (error) {
         console.error(`[Courier] ❌ Error sending 'Breaker Application' alert for ${application.email}:`, error);
-    }
-}
-
-// ─── Founder alert: buyer reported a problem with an order ───────────────────
-
-/**
- * Sent from /api/orders/[id]/report the moment a buyer opens a problem report.
- * The order is already 'disputed' and the ticket already filed when this runs;
- * this is the page to the founder, who decides the outcome under the Cardstreet
- * Guarantee (refund from platform funds, ban if warranted). English-only,
- * internal. Best-effort, never throws.
- */
-export async function sendOrderDisputeAlert(report: {
-    orderId: string;
-    shortId: string;
-    reason: string;
-    details: string;
-    itemName: string;
-    amountThb: number;
-    buyer: string;
-    seller: string;
-    ticketId: string | null;
-}): Promise<void> {
-    const courier = getCourier();
-    if (!courier) { console.warn('[Courier] Client not initialized — skipping order-dispute alert'); return; }
-
-    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
-    if (!to) return;
-
-    const openedAt = new Date().toLocaleString('en-US', {
-        timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short',
-    });
-    const lines = [
-        `Order: #${report.shortId} (${report.orderId})`,
-        report.itemName ? `Item: ${report.itemName}` : null,
-        `Amount: ฿${Math.round(report.amountThb).toLocaleString()}`,
-        `Buyer: ${report.buyer}`,
-        `Seller: ${report.seller}`,
-        `Reason: ${report.reason}`,
-        report.details ? `Details: ${report.details}` : null,
-        `Opened: ${openedAt} (Bangkok)`,
-        '',
-        `Ticket: ${appBaseUrl()}/admin/tickets`,
-        `Order: ${appBaseUrl()}/orders/${report.orderId}`,
-    ].filter((l) => l !== null) as string[];
-
-    try {
-        await courier.send.message({
-            message: {
-                to: { email: to },
-                content: {
-                    title: `Problem report on order #${report.shortId}: ${report.reason}`,
-                    body: `A buyer reported a problem. The order is on hold as 'disputed' until you resolve the ticket.\n\n${lines.join('\n')}`,
-                },
-                routing: { method: 'all', channels: ['email'] },
-                data: { type: 'order_dispute', orderId: report.orderId, ticketId: report.ticketId ?? '' },
-            },
-        });
-        console.log(`[Courier] ✅ Order-dispute alert sent for #${report.shortId} → ${to}`);
-    } catch (error) {
-        console.error(`[Courier] ❌ Error sending order-dispute alert for #${report.shortId}:`, error);
     }
 }
 
@@ -3413,12 +3353,16 @@ export async function sendChatMessageNotification(
         threadId: string; senderName: string; body: string; allowEmail: boolean;
         /** Where the email button goes instead of the app inbox (the support account answers from /admin). */
         cta?: { label: string; path: string };
+        /** Send the email here instead of the user's own address (the support account's alerts go to the team inbox). */
+        emailTo?: string;
     },
 ): Promise<{ pushed: boolean; emailed: boolean }> {
     const courier = getCourier();
     if (!courier) return { pushed: false, emailed: false };
 
-    const { email, fcmToken, prefs } = await getUserNotifContext(userId);
+    const ctx = await getUserNotifContext(userId);
+    const { fcmToken, prefs } = ctx;
+    const email = msg.emailTo?.trim() || ctx.email;
     const wantPush = !!fcmToken && prefs.chat_push !== false;
     const wantEmail = msg.allowEmail && !!email && prefs.chat_email !== false;
     if (!wantPush && !wantEmail) return { pushed: false, emailed: false };
@@ -3525,13 +3469,17 @@ export async function sendShipReminderNotification(
     }
 }
 
-/** Pages the founder when a paid parcel has not moved for 72 hours. */
+/**
+ * Pages the support inbox when a paid parcel has not moved for 72 hours.
+ * Links the order in the admin lookup (/admin/orders), where the seller's
+ * and buyer's contact details are, so whoever reads the inbox can act.
+ */
 export async function sendUnshippedOrderAlert(alert: {
     orderId: string; shortId: string; seller: string; buyer: string; hoursSincePaid: number; itemName: string;
 }): Promise<void> {
     const courier = getCourier();
     if (!courier) return;
-    const to = (process.env.ORDER_DISPUTE_NOTIFY_EMAIL || process.env.BREAKER_APPLICATION_NOTIFY_EMAIL || 'brandonlcole35@gmail.com').trim();
+    const to = supportInboxEmail();
     if (!to) return;
     const lines = [
         `Order: #${alert.shortId} (${alert.orderId})`,
@@ -3540,7 +3488,7 @@ export async function sendUnshippedOrderAlert(alert: {
         `Buyer: ${alert.buyer}`,
         `Paid: ${alert.hoursSincePaid} hours ago, still not shipped (two seller reminders sent)`,
         '',
-        `Order: ${appBaseUrl()}/orders/${alert.orderId}`,
+        `Order in admin: ${appBaseUrl()}/admin/orders?q=${alert.orderId}`,
     ].filter((l) => l !== null) as string[];
     try {
         await courier.send.message({
@@ -3548,7 +3496,7 @@ export async function sendUnshippedOrderAlert(alert: {
                 to: { email: to },
                 content: {
                     title: `Unshipped order #${alert.shortId}: ${alert.hoursSincePaid}h since payment`,
-                    body: `A paid order has not moved for three days. The buyer can report it under the guarantee; you may want to reach the seller first.\n\n${lines.join('\n')}`,
+                    body: `A paid order has not moved for three days. Reach the seller first (their phone and email are on the order in admin); the buyer can report it under the guarantee.\n\n${lines.join('\n')}`,
                 },
                 routing: { method: 'all', channels: ['email'] },
                 data: { type: 'unshipped_order', orderId: alert.orderId },
@@ -3556,6 +3504,136 @@ export async function sendUnshippedOrderAlert(alert: {
         });
     } catch (error) {
         console.error(`[Courier] ❌ Error sending unshipped-order alert for #${alert.shortId}:`, error);
+    }
+}
+
+// ─── Refund and cancellation notices (lib/orderRefunds) ──────────────────────
+
+export type OrderRefundReason = 'buyer_cancel' | 'auto_unshipped' | 'admin';
+
+export interface OrderRefundDetails {
+    /** The checkout's first order: the push and the email CTA land on its page. */
+    orderId: string;
+    amountThb: number;
+    reason: OrderRefundReason;
+    itemName?: string | null;
+    itemCount?: number;
+}
+
+/**
+ * Tells the buyer their money is on its way back. Cards take 5-10 business
+ * days through the issuer; PromptPay has no reverse rail, so Stripe emails
+ * the buyer for an account to pay into. The copy covers both since we only
+ * know the method after the fact. Transactional: sent unless the buyer turned
+ * order notifications off.
+ */
+export async function sendOrderRefundedNotification(buyerId: string, d: OrderRefundDetails): Promise<void> {
+    const courier = getCourier();
+    if (!courier) return;
+    const { email, fcmToken, prefs } = await getUserNotifContext(buyerId);
+    const wantEmail = prefs.shipped_email !== false && !!email;
+    const wantPush = prefs.shipped_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return;
+
+    const shortId = d.orderId.slice(0, 8).toUpperCase();
+    const amount = `฿${Math.round(d.amountThb).toLocaleString()}`;
+    const what = d.itemName ? ` (${d.itemName}${(d.itemCount ?? 1) > 1 ? ` +${(d.itemCount ?? 1) - 1}` : ''})` : '';
+    const whyTh = d.reason === 'auto_unshipped'
+        ? 'ผู้ขายไม่ได้จัดส่งภายในกำหนด ระบบจึงยกเลิกคำสั่งซื้อให้'
+        : d.reason === 'buyer_cancel' ? 'ตามที่คุณขอยกเลิก' : 'ทีมงาน Cardstreet ยกเลิกคำสั่งซื้อนี้ให้';
+    const whyEn = d.reason === 'auto_unshipped'
+        ? 'The seller did not ship in time, so we cancelled it for you.'
+        : d.reason === 'buyer_cancel' ? 'You asked to cancel it.' : 'The Cardstreet team cancelled it.';
+    const title = `คืนเงิน ${amount} คำสั่งซื้อ #${shortId} · ${amount} refunded, order #${shortId}`;
+    try {
+        await courier.send.message({
+            message: {
+                to: buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null),
+                routing: buildRouting(wantEmail, wantPush, 'inline'),
+                providers: postmarkOverride(title),
+                data: { type: 'order_refunded', orderId: d.orderId },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        {
+                            text:
+                                `คำสั่งซื้อ #${shortId}${what} ถูกยกเลิกแล้ว ${whyTh} เราคืนเงิน ${amount} เต็มจำนวนกลับไปยังช่องทางที่คุณชำระ ` +
+                                'บัตรเครดิตหรือเดบิตใช้เวลา 5-10 วันทำการ ถ้าชำระด้วย PromptPay Stripe จะส่งอีเมลขอบัญชีสำหรับรับเงินคืน การ์ดใบนี้ถูกนำออกจากคอลเลกชันของคุณแล้ว',
+                        },
+                        {
+                            text:
+                                `Order #${shortId}${what} has been cancelled. ${whyEn} We refunded the full ${amount} to the way you paid. ` +
+                                'Cards take 5-10 business days. If you paid with PromptPay, Stripe will email you for an account to send it to. The card has been removed from your collection.',
+                            muted: true,
+                        },
+                    ],
+                    cta: { label: 'ดูคำสั่งซื้อ · View order', url: `${appBaseUrl()}/orders/${d.orderId}` },
+                    pushBody: `คืนเงิน ${amount} แล้ว คำสั่งซื้อ #${shortId} ถูกยกเลิก · ${amount} refunded, order #${shortId} cancelled.`,
+                }),
+            } as any,
+        });
+        console.log(`[Courier] ✅ 'Order refunded' notification sent to buyer ${buyerId}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Order refunded' notification to ${buyerId}:`, error);
+    }
+}
+
+/**
+ * Tells the seller the sale is gone and why. For a seller who did not ship,
+ * it also says what it cost them: the refund came out of their Stripe
+ * balance, our fee went back to the buyer with it, and Stripe keeps its
+ * processing fee.
+ */
+export async function sendOrderCancelledSellerNotification(sellerId: string, d: OrderRefundDetails): Promise<void> {
+    const courier = getCourier();
+    if (!courier) return;
+    const { email, fcmToken, prefs } = await getUserNotifContext(sellerId);
+    const wantEmail = prefs.sold_email !== false && !!email;
+    const wantPush = prefs.sold_push !== false && !!fcmToken;
+    if (!wantEmail && !wantPush) return;
+
+    const shortId = d.orderId.slice(0, 8).toUpperCase();
+    const amount = `฿${Math.round(d.amountThb).toLocaleString()}`;
+    const what = d.itemName ? ` (${d.itemName}${(d.itemCount ?? 1) > 1 ? ` +${(d.itemCount ?? 1) - 1}` : ''})` : '';
+    const whyTh = d.reason === 'auto_unshipped'
+        ? 'เพราะไม่ได้จัดส่งภายใน 5 วันหลังผู้ซื้อชำระเงิน'
+        : d.reason === 'buyer_cancel' ? 'ผู้ซื้อขอยกเลิกเพราะยังไม่ได้จัดส่งหลังผ่านไป 4 วัน' : 'โดยทีมงาน Cardstreet';
+    const whyEn = d.reason === 'auto_unshipped'
+        ? 'because it was not shipped within 5 days of payment'
+        : d.reason === 'buyer_cancel' ? 'because the buyer cancelled after 4 days without a shipment' : 'by the Cardstreet team';
+    const title = `คำสั่งซื้อ #${shortId} ถูกยกเลิก · Order #${shortId} cancelled`;
+    try {
+        await courier.send.message({
+            message: {
+                to: buildRecipient(wantEmail ? email : null, wantPush ? fcmToken : null),
+                routing: buildRouting(wantEmail, wantPush, 'inline'),
+                providers: postmarkOverride(title),
+                data: { type: 'order_cancelled', orderId: d.orderId },
+                content: emailPlusPushContent({
+                    title,
+                    emailParagraphs: [
+                        {
+                            text:
+                                `คำสั่งซื้อ #${shortId}${what} ถูกยกเลิก ${whyTh} เราคืนเงิน ${amount} ให้ผู้ซื้อจากยอดในบัญชี Stripe ของคุณแล้ว ` +
+                                'ค่าธรรมเนียม Cardstreet คืนไปพร้อมกัน ส่วนค่าธรรมเนียม Stripe ไม่คืน ถ้ายังมีการ์ดอยู่ ลงขายใหม่ได้จากคลังของคุณ ' +
+                                'ครั้งหน้า ส่งภายใน 2 วัน หรือกด "ส่งเองแล้ว" พร้อมเลขพัสดุทันทีที่ส่ง',
+                        },
+                        {
+                            text:
+                                `Order #${shortId}${what} was cancelled ${whyEn}. We refunded ${amount} to the buyer from your Stripe balance. ` +
+                                'Our fee went back with it; Stripe keeps its processing fee. If you still have the card, relist it from your vault. ' +
+                                'Next time, ship within 2 days, or tap "Ship it myself" with the tracking number as soon as it leaves.',
+                            muted: true,
+                        },
+                    ],
+                    cta: { label: 'ดูคำสั่งซื้อ · View order', url: `${appBaseUrl()}/orders/${d.orderId}` },
+                    pushBody: `คำสั่งซื้อ #${shortId} ถูกยกเลิก คืนเงิน ${amount} ให้ผู้ซื้อแล้ว · Order #${shortId} cancelled, ${amount} refunded to the buyer.`,
+                }),
+            } as any,
+        });
+        console.log(`[Courier] ✅ 'Order cancelled' notification sent to seller ${sellerId}`);
+    } catch (error) {
+        console.error(`[Courier] ❌ Error sending 'Order cancelled' notification to ${sellerId}:`, error);
     }
 }
 
@@ -3603,7 +3681,7 @@ export async function sendBreakerApplicationConfirmation(applicant: {
     const to = applicant.email.trim();
     if (!to) return false;
 
-    const supportEmail = (process.env.CARDSTREET_SUPPORT_EMAIL || 'support@thailandtcg.com').trim();
+    const supportEmail = customerSupportEmail();
     // First name only: "Somchai Tanaka" -> "Somchai". Falls back to no greeting
     // name rather than printing an empty string.
     const firstName = applicant.fullName.trim().split(/\s+/)[0] || '';
