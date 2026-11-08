@@ -14,8 +14,12 @@
  *   - identity / bank verification are flags the mock KYC sheet flips after
  *     a short "review"
  *   - a shipment records where it goes, its fee and insurance, as paid
+ *   - stock is this browser's copy of the inventory count: a pulled card
+ *     leaves it, a sold-back card returns to it, and the tables are built
+ *     from what is left (a pack pauses when its floor class runs dry)
  *   - "other collectors" are simulated so the feed moves; they are labelled
- *     as simulated in the UI and switch off in the preview menu
+ *     as simulated in the UI, take nothing out of stock, and are off by
+ *     default now that the pool is real stock
  *
  * The seam for the real build: `buy` becomes one server call that charges
  * the card, draws with a server-held seed and returns the pulls with their
@@ -32,14 +36,17 @@ import {
     addBusinessDays, cashoutFeeThb, coinsForThb, insuranceThb, missingVerification,
     type Verification, type VerificationKind,
 } from './policy';
-import { getSlab, poolForGame } from './pool';
+import { getSlab, poolFingerprint, poolForGame } from './pool';
 import { PACK_GAMES, TIERS, TIER_ORDER, sellBackThb } from './tiers';
-import type { FeedEvent, GameKey, PackTable, Pull, ShipTo, TierKey } from './types';
+import type { FeedEvent, GameKey, PackTable, Pull, ShipTo, Slab, TierKey } from './types';
 
-const STORAGE_KEY = 'cs_slab_packs_preview_v5';
+const STORAGE_KEY = 'cs_slab_packs_preview_v6';
+const STORAGE_VERSION = 6;
 const FEED_CAP = 40;
 const PULL_CAP = 400;
 const LEDGER_CAP = 300;
+/** Stock snapshots kept for re-verifying old pulls; the oldest fall away. */
+const SNAPSHOT_CAP = 120;
 
 /** Demo coin balance standing in for rewards.coin_balance (1 coin = 1 satang). */
 export const START_COINS = 5000;
@@ -52,7 +59,7 @@ export interface PreviewSettings {
     haptics: boolean;
     /** Skip the build-up and go straight to the reveal. */
     fast: boolean;
-    /** Simulated other collectors pulling from the same packs. */
+    /** Simulated other collectors pulling from the same packs. They take nothing out of stock. */
     activity: boolean;
 }
 
@@ -100,9 +107,19 @@ export interface PreviewState {
     feed: FeedEvent[];
     settings: PreviewSettings;
     stats: PreviewStats;
+    /** Copies of each card type left, by slab key. A pull takes one; a sell-back returns one. */
+    stock: Record<string, number>;
+    /**
+     * The in-stock keys of a game at the moment of a draw, by fingerprint, so
+     * a pull can be re-verified against the exact table it was drawn from
+     * after stock has moved. Bounded by SNAPSHOT_CAP.
+     */
+    stockSnapshots: Record<string, string[]>;
 }
 
-const DEFAULT_SETTINGS: PreviewSettings = { sound: true, haptics: true, fast: false, activity: true };
+// Simulated activity is off by default: the pool is real stock, and a bot
+// "pulling" a one-copy card would read as that card being gone.
+const DEFAULT_SETTINGS: PreviewSettings = { sound: true, haptics: true, fast: false, activity: false };
 
 const SERVER_STATE: PreviewState = {
     hydrated: false,
@@ -116,33 +133,61 @@ const SERVER_STATE: PreviewState = {
     feed: [],
     settings: DEFAULT_SETTINGS,
     stats: { packs: 0, spentThb: 0, pulledThb: 0, soldBackThb: 0 },
+    stock: {},
+    stockSnapshots: {},
 };
 
 let state: PreviewState = SERVER_STATE;
 const listeners = new Set<() => void>();
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ── The published tables, one per game and tier ─────────────────────────────
+// ── The published tables, one per game and tier, for the stock in hand ──────
 
+// Keyed by game, tier and the fingerprint of the pool they were built from.
+// Stock moves one card at a time, so the cache stays small; capped anyway.
 const tables = new Map<string, PackTable | null>();
+const TABLE_CACHE_CAP = 64;
 
-/**
- * The table for a game's tier, or null when the game's pool cannot fill
- * every class the tier needs (a thin game at a dear tier). A null tier is
- * not offered for that game.
- */
-export function tryTable(game: GameKey, tier: TierKey): PackTable | null {
-    // A coming-soon pack is not sold, so it has no table, whatever the pool holds.
-    if (TIERS[tier].status !== 'live') return null;
-    const key = `${game}:${tier}`;
+/** Full stock, the way the inventory file lists it. */
+function fullStock(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const game of PACK_GAMES) for (const s of poolForGame(game)) out[s.key] = s.stock;
+    return out;
+}
+
+/** The card types of a game with at least one copy left. Before hydration, the whole inventory. */
+export function stockPool(game: GameKey, stock: Record<string, number> = state.stock): readonly Slab[] {
+    const pool = poolForGame(game);
+    if (!state.hydrated) return pool;
+    return pool.filter((s) => (stock[s.key] ?? 0) > 0);
+}
+
+function tableFor(game: GameKey, tierKey: TierKey, pool: readonly Slab[]): PackTable | null {
+    // A sold-out pack is not sold, so it has no table, whatever the pool holds.
+    if (TIERS[tierKey].status !== 'live') return null;
+    const key = `${game}:${tierKey}:${poolFingerprint(pool)}`;
     if (!tables.has(key)) {
         try {
-            tables.set(key, buildTable(game, TIERS[tier], poolForGame(game)));
+            tables.set(key, buildTable(game, TIERS[tierKey], pool));
         } catch {
+            // The floor class is empty: paused until restocked.
             tables.set(key, null);
+        }
+        if (tables.size > TABLE_CACHE_CAP) {
+            const oldest = tables.keys().next();
+            if (!oldest.done) tables.delete(oldest.value);
         }
     }
     return tables.get(key) ?? null;
+}
+
+/**
+ * The table for a game's tier from the stock in hand, or null when the pack
+ * is not on sale: a sold-out tier, or a live tier whose floor class has no
+ * cards left (paused until restocked).
+ */
+export function tryTable(game: GameKey, tier: TierKey): PackTable | null {
+    return tableFor(game, tier, stockPool(game));
 }
 
 export function getTable(game: GameKey, tier: TierKey): PackTable {
@@ -151,21 +196,38 @@ export function getTable(game: GameKey, tier: TierKey): PackTable {
     return table;
 }
 
-/** The tiers a game sells, cheapest first. */
+/**
+ * The table a pull was drawn from, rebuilt from the stock snapshot its
+ * fingerprint names, so the fairness check still runs after stock has
+ * moved. Null when the snapshot has aged out or the pull predates them.
+ */
+export function tableForPull(pull: Pull): PackTable | null {
+    const game = getSlab(pull.slabKey)?.game;
+    if (!game || !pull.stockHash) return null;
+    const keys = state.stockSnapshots[pull.stockHash];
+    if (!keys) return null;
+    const pool = keys.map((k) => getSlab(k)).filter((s): s is Slab => !!s);
+    return tableFor(game, pull.tier, pool);
+}
+
+/** The tiers a game sells right now, cheapest first. */
 export function availableTiers(game: GameKey): TierKey[] {
     return TIER_ORDER.filter((tier) => tryTable(game, tier) !== null);
 }
 
+const ALL_TIERS: TierKey[] = [...TIER_ORDER];
+
 /**
- * The packs the lobby shows for a game: the ones it sells, then the ones
- * marked coming soon (shown at their price, not buyable). A live tier the
- * game's pool cannot fill is left out, as before.
+ * Every pack the lobby shows, cheapest first: the ones on sale and, greyed
+ * out as sold out, the rest (a tier with no stock behind it, or a live tier
+ * paused until its floor is restocked). One stable array, so it can sit in
+ * effect dependencies.
  */
-export function offeredTiers(game: GameKey): TierKey[] {
-    return TIER_ORDER.filter((tier) => TIERS[tier].status !== 'live' || tryTable(game, tier) !== null);
+export function offeredTiers(): TierKey[] {
+    return ALL_TIERS;
 }
 
-/** Games that sell at least one tier. */
+/** Games that sell at least one tier right now. */
 export function availableGames(): GameKey[] {
     return PACK_GAMES.filter((g) => availableTiers(g).length > 0);
 }
@@ -181,7 +243,7 @@ function persist() {
         try {
             const rest: Partial<PreviewState> = { ...state };
             delete rest.hydrated;
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 5, ...rest }));
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: STORAGE_VERSION, ...rest }));
         } catch {
             // Storage full or blocked: the preview still plays, it just will
             // not survive a reload.
@@ -210,7 +272,7 @@ const BOT_NAMES = [
 ];
 
 // Cheaper packs move faster, as they would; Pokemon moves most. Only packs
-// that are on sale: nobody pulls a coming-soon pack.
+// that are on sale: nobody pulls a sold-out pack.
 const BOT_TIER_WEIGHTS: [TierKey, number][] = [
     ['bronze', 8], ['silver', 5], ['gold', 3],
 ];
@@ -230,7 +292,10 @@ function weighted<T>(pairs: readonly [T, number][]): T {
     return pairs[0][0];
 }
 
-/** A simulated collector's pull: a real draw from a table, straight to the feed. Null when that pack is not sold. */
+/**
+ * A simulated collector's pull: a real draw from the current table, straight
+ * to the feed. It takes nothing out of stock. Null when that pack is not sold.
+ */
 function botEvent(who: string, at: number): FeedEvent | null {
     const game = weighted(BOT_GAME_WEIGHTS);
     const tierKey = weighted(BOT_TIER_WEIGHTS);
@@ -240,14 +305,16 @@ function botEvent(who: string, at: number): FeedEvent | null {
     return { id: `bot-${game}-${tierKey}-${at}-${Math.floor(Math.random() * 1e6)}`, who, me: false, slabKey: d.slabKey, tier: tierKey, cls: d.cls, at };
 }
 
-function freshState(now: number): PreviewState {
+function freshState(now: number, settings: PreviewSettings = DEFAULT_SETTINGS): PreviewState {
     const feed: FeedEvent[] = [];
-    // The feed opens already moving, spread over the last hour.
-    for (let i = 0; i < 14; i++) {
-        const e = botEvent(pick(BOT_NAMES), now - Math.floor(Math.random() * 3_600_000));
-        if (e) feed.push(e);
+    // With simulated collectors on, the feed opens already moving, spread over the last hour.
+    if (settings.activity) {
+        for (let i = 0; i < 14; i++) {
+            const e = botEvent(pick(BOT_NAMES), now - Math.floor(Math.random() * 3_600_000));
+            if (e) feed.push(e);
+        }
+        feed.sort((a, b) => b.at - a.at);
     }
-    feed.sort((a, b) => b.at - a.at);
     return {
         hydrated: true,
         walletThb: 0,
@@ -258,9 +325,32 @@ function freshState(now: number): PreviewState {
         cashouts: [],
         pulls: [],
         feed,
-        settings: DEFAULT_SETTINGS,
+        settings,
         stats: { packs: 0, spentThb: 0, pulledThb: 0, soldBackThb: 0 },
+        stock: fullStock(),
+        stockSnapshots: {},
     };
+}
+
+/** Saved counts for the cards still in the inventory; a card added since starts at its full count. */
+function mergeStock(saved: unknown): Record<string, number> {
+    const stock = fullStock();
+    if (!saved || typeof saved !== 'object') return stock;
+    const prev = saved as Record<string, unknown>;
+    for (const key of Object.keys(stock)) {
+        const n = prev[key];
+        if (typeof n === 'number' && Number.isFinite(n)) stock[key] = Math.max(0, Math.min(stock[key], Math.floor(n)));
+    }
+    return stock;
+}
+
+function loadSnapshots(saved: unknown): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    if (!saved || typeof saved !== 'object') return out;
+    for (const [hash, keys] of Object.entries(saved as Record<string, unknown>)) {
+        if (Array.isArray(keys) && keys.every((k) => typeof k === 'string')) out[hash] = keys as string[];
+    }
+    return out;
 }
 
 function load(now: number): PreviewState {
@@ -268,7 +358,7 @@ function load(now: number): PreviewState {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return freshState(now);
         const saved = JSON.parse(raw);
-        if (!saved || saved.v !== 5 || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
+        if (!saved || saved.v !== STORAGE_VERSION || typeof saved.walletThb !== 'number' || typeof saved.clientSeed !== 'string') return freshState(now);
         return {
             hydrated: true,
             walletThb: saved.walletThb,
@@ -282,6 +372,8 @@ function load(now: number): PreviewState {
             feed: (Array.isArray(saved.feed) ? saved.feed : []).filter((e: FeedEvent) => !!getSlab(e.slabKey)),
             settings: { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) },
             stats: { ...SERVER_STATE.stats, ...(saved.stats ?? {}) },
+            stock: mergeStock(saved.stock),
+            stockSnapshots: loadSnapshots(saved.stockSnapshots),
         };
     } catch {
         return freshState(now);
@@ -350,20 +442,52 @@ export const previewActions = {
     },
 
     /**
-     * Buy `count` packs of a game's tier. Atomic: the payment, the draws and
-     * the new pulls all land together or not at all. The pulls come back
-     * unrevealed and are already owned — closing the app mid-reveal loses
-     * nothing. A card payment is simulated as instant.
+     * Buy `count` packs of a game's tier. Atomic: the payment, the draws, the
+     * stock taken and the new pulls all land together or not at all. The
+     * pulls come back unrevealed and are already owned — closing the app
+     * mid-reveal loses nothing. A card payment is simulated as instant.
+     *
+     * Packs are drawn one at a time from the stock that is left, so a
+     * one-copy card cannot be pulled twice in the same order; each pull
+     * records the fingerprint of the stock its table was built from. If the
+     * floor runs dry mid-order, the buyer gets (and pays for) the packs that
+     * could be drawn.
      */
     buy(game: GameKey, tierKey: TierKey, count: number, method: PaymentMethod): BuyResult {
         const s = state;
         if (!s.hydrated) return { ok: false, reason: 'loading' };
-        const table = tryTable(game, tierKey);
-        if (!table) return { ok: false, reason: 'unavailable' };
+        if (!tryTable(game, tierKey)) return { ok: false, reason: 'unavailable' };
         const tier = TIERS[tierKey];
-        const n = Math.max(1, Math.floor(count));
-        const cost = n * tier.priceThb;
+        const asked = Math.max(1, Math.floor(count));
         const now = Date.now();
+
+        const stock = { ...s.stock };
+        const snapshots = { ...s.stockSnapshots };
+        const pulls: Pull[] = [];
+        for (let i = 0; i < asked; i++) {
+            const pool = stockPool(game, stock);
+            const table = tableFor(game, tierKey, pool);
+            if (!table) break;
+            const hash = poolFingerprint(pool);
+            if (!snapshots[hash]) {
+                snapshots[hash] = pool.map((x) => x.key);
+                const hashes = Object.keys(snapshots);
+                for (const old of hashes.slice(0, Math.max(0, hashes.length - SNAPSHOT_CAP))) delete snapshots[old];
+            }
+            const seed = newSeed();
+            const d = draw(table, seed, s.clientSeed);
+            stock[d.slabKey] = Math.max(0, (stock[d.slabKey] ?? 0) - 1);
+            pulls.push({
+                id: `${game}-${tierKey}-${now}-${i}`,
+                slabKey: d.slabKey, tier: tierKey, cls: d.cls,
+                pricePaidThb: tier.priceThb, at: now, status: 'unrevealed',
+                proof: { commit: commitFor(seed), seed, clientSeed: s.clientSeed },
+                stockHash: hash,
+            });
+        }
+        if (!pulls.length) return { ok: false, reason: 'unavailable' };
+        const n = pulls.length;
+        const cost = n * tier.priceThb;
 
         let walletThb = s.walletThb;
         let coins = s.coins;
@@ -381,23 +505,14 @@ export const previewActions = {
             coins += Math.floor(cost * COINS_EARNED_PER_THB);
         }
 
-        const pulls: Pull[] = [];
-        for (let i = 0; i < n; i++) {
-            const seed = newSeed();
-            const d = draw(table, seed, s.clientSeed);
-            pulls.push({
-                id: `${game}-${tierKey}-${now}-${i}`,
-                slabKey: d.slabKey, tier: tierKey, cls: d.cls,
-                pricePaidThb: tier.priceThb, at: now, status: 'unrevealed',
-                proof: { commit: commitFor(seed), seed, clientSeed: s.clientSeed },
-            });
-        }
         set({
             ...s,
             walletThb,
             coins,
             ledger,
             pulls: [...pulls, ...s.pulls].slice(0, PULL_CAP),
+            stock,
+            stockSnapshots: snapshots,
             stats: { ...s.stats, packs: s.stats.packs + n, spentThb: s.stats.spentThb + cost },
         });
         return { ok: true, pulls };
@@ -417,16 +532,18 @@ export const previewActions = {
         });
     },
 
-    /** Instant sell-back to wallet credit. Returns the baht credited. */
+    /** Instant sell-back to wallet credit. The card is the house's again and goes back into stock. Returns the baht credited. */
     sell(pullIds: readonly string[]): number {
         const now = Date.now();
         let credited = 0;
         let ledger = state.ledger;
+        const stock = { ...state.stock };
         const pulls = state.pulls.map((p) => {
             if (!pullIds.includes(p.id) || (p.status !== 'vault' && p.status !== 'unrevealed' && p.status !== 'listed')) return p;
             const paid = sellBackThb(getSlab(p.slabKey)?.valueThb ?? 0, TIERS[p.tier]);
             credited += paid;
             ledger = [entry('sellback', paid, now, p.id), ...ledger].slice(0, LEDGER_CAP);
+            if (p.slabKey in stock) stock[p.slabKey] += 1;
             return { ...p, status: 'sold' as const, soldForThb: paid, listPriceThb: undefined, listedAt: undefined };
         });
         if (credited === 0) return 0;
@@ -434,6 +551,7 @@ export const previewActions = {
             ...state,
             pulls,
             ledger,
+            stock,
             walletThb: state.walletThb + credited,
             stats: { ...state.stats, soldBackThb: state.stats.soldBackThb + credited },
         });
@@ -522,10 +640,9 @@ export const previewActions = {
         set({ ...state, settings: { ...state.settings, [key]: value } });
     },
 
-    /** Wipe the preview and start again with an empty wallet and vault. */
+    /** Wipe the preview and start again with an empty wallet and vault, and every card back in stock. */
     reset() {
-        const settings = state.settings;
-        set({ ...freshState(Date.now()), settings });
+        set(freshState(Date.now(), state.settings));
     },
 
     /**

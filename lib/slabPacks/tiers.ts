@@ -8,8 +8,8 @@
  * at the founder's 2026-11-04 low price points (Bronze ฿150, Silver ฿450,
  * Gold ฿750): a ladder for clearing singles, ex cards above all, out of a
  * ~$1,000 inventory. Platinum to Galaxy Opal keep their 2026-10-24 prices
- * and show as coming soon. The odds have not been through pricing or legal
- * review.
+ * and show as sold out until there is stock for them. The odds have not been
+ * through pricing or legal review.
  */
 
 import type { GameKey, HitClass, PackTier, TierKey } from './types';
@@ -109,7 +109,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     platinum: {
         key: 'platinum',
         name: 'Platinum',
-        status: 'coming_soon',
+        status: 'sold_out',
         priceThb: 2325,
         odds: { d: 0.45, c: 0.3, b: 0.19, a: 0.04, s: 0.013, ss: 0.007 },
         sellBackRate: 0.85,
@@ -118,7 +118,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     emerald: {
         key: 'emerald',
         name: 'Emerald',
-        status: 'coming_soon',
+        status: 'sold_out',
         priceThb: 3875,
         odds: { d: 0.46, c: 0.3, b: 0.18, a: 0.04, s: 0.012, ss: 0.008 },
         sellBackRate: 0.85,
@@ -127,7 +127,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     diamond: {
         key: 'diamond',
         name: 'Diamond',
-        status: 'coming_soon',
+        status: 'sold_out',
         priceThb: 7750,
         odds: { d: 0.47, c: 0.3, b: 0.17, a: 0.04, s: 0.012, ss: 0.008 },
         sellBackRate: 0.85,
@@ -136,7 +136,7 @@ export const TIERS: Record<TierKey, PackTier> = {
     opal: {
         key: 'opal',
         name: 'Galaxy Opal',
-        status: 'coming_soon',
+        status: 'sold_out',
         priceThb: 15500,
         odds: { d: 0.48, c: 0.3, b: 0.16, a: 0.04, s: 0.012, ss: 0.008 },
         sellBackRate: 0.85,

@@ -1,12 +1,12 @@
 # Slab Packs (Digital Packs) — mechanics, money and design
 
-Mystery packs that each hold one real graded slab, sold per game (Pokémon, One Piece, Lorcana to start; a switch above the packs picks the game, and each game has its own pool and its own odds tables). The buyer rips the pack, the slab is revealed, and they keep it in the vault (where it is part of their Cardstreet collection), sell it back on the spot for wallet credit, list it on the Cardstreet marketplace, or have it shipped.
+Mystery packs that each hold one real card from Cardstreet's stock, a near-mint single or a graded slab, sold per game (Pokémon, One Piece, Lorcana to start; a switch above the packs picks the game when more than one has stock, and each game has its own pool and its own odds tables). The buyer rips the pack, the slab is revealed, and they keep it in the vault (where it is part of their Cardstreet collection), sell it back on the spot for wallet credit, list it on the Cardstreet marketplace, or have it shipped.
 
-**Status (2026-10-24): playable prototype behind the admin wall, at `/packs`.** It covers the mechanics, the money rules and the full mobile experience. It takes no money: card payments are simulated, the wallet, the identity checks, the listings and the shipments are browser state. See [What is real and what is stand-in](#what-is-real-and-what-is-stand-in) and [Connecting to the rest of Cardstreet](#connecting-to-the-rest-of-cardstreet).
+**Status (2026-11-08): playable prototype behind the admin wall, at `/packs`, running on the real card stock.** It covers the mechanics, the money rules and the full mobile experience. It takes no money: card payments are simulated, the wallet, the identity checks, the listings, the shipments and the stock counts are browser state. See [What is real and what is stand-in](#what-is-real-and-what-is-stand-in) and [Connecting to the rest of Cardstreet](#connecting-to-the-rest-of-cardstreet).
 
 ## The mechanic: fixed, published odds
 
-A pack is one independent draw from a published table. Each tier shows, before purchase, every card the pack can contain and the exact chance of each. The chances do not move between pulls and are the same for every buyer: they change only when the pool itself changes (a card leaves stock, stock is added), nothing is counted down, and nothing is shown as pulled or gone. This is the model the large digital-pack operators run (Courtyard shows per-card odds that update only when the pool itself changes, with "real-time odds" meaning the table, not a countdown).
+A pack is one independent draw from a published table. Each tier shows, before purchase, every card the pack can contain and the exact chance of each. The chances are the same for every buyer and change only when the pool itself changes: a pulled card leaves stock (one copy fewer, so a one-copy card cannot be pulled twice), a sold-back card returns to it, stock is added. Nothing is counted down in front of the buyer and nothing is shown as pulled or gone. This is the model the large digital-pack operators run (Courtyard shows per-card odds that update only when the pool itself changes, with "real-time odds" meaning the table, not a countdown).
 
 **Only the floor pauses a pack** (founder's rule, 2026-11-07: "once a chase is pulled I don't want to pause the packs; packs shouldn't be paused unless there's no cards for the floor of that pack tier"). The floor is the cheapest class the tier gives a chance to (D). A class above it that is sold out hands its chance to the next stocked class below it, top down (no SS: its 0.6% goes to S; no S either: 2% goes to A; and so on), so the table still sums to 1 and the pack keeps selling. The lobby grid and the odds sheet simply leave a sold-out class out rather than showing it at 0%. A pack with nothing but floor cards left is 100% D, which the published average pull makes plain; a pack whose floor is empty is paused until the floor is restocked (`buildTable` refuses to build it; `floorClass` / `effectiveOdds` in `engine.ts`).
 
@@ -16,21 +16,21 @@ A pack is one independent draw from a published table. Each tier shows, before p
 
 ### The ladder
 
-Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). The names follow the NBA 2K card tiers. Three packs are on sale at the founder's 2026-11-04 low price points, built to clear singles (ex cards above all) out of a ~$1,000 inventory; the rest keep their 2026-10-24 prices and show as **coming soon** (`status: 'coming_soon'`: in the carousel at their price, dimmed under a ribbon, not buyable, no table, never pulled by the simulated collectors). The odds are working defaults that have not been through pricing or legal review.
+Single source of truth: [lib/slabPacks/tiers.ts](../../lib/slabPacks/tiers.ts). The names follow the NBA 2K card tiers. Three packs are on sale at the founder's 2026-11-04 low price points, built to clear singles (ex cards above all) out of a ~$1,000 inventory; the rest keep their 2026-10-24 prices and show as **sold out** (`status: 'sold_out'`: in the carousel at their price, dimmed under a Sold out ribbon, not buyable, no table, never pulled by the simulated collectors). The odds are working defaults that have not been through pricing or legal review.
 
 | Tier | Status | Material | Pack price | Odds (D / C / B / A / S / SS) | Average pull | Floor | Top prize |
 |---|---|---|---|---|---|---|---|
-| Bronze | live | metal | ฿150 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 96% | ฿85 | ฿4,366 |
-| Silver | live | metal | ฿450 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 96% | ฿230 | ฿13,374 |
-| Gold | live | metal | ฿750 | 45% / 30% / 19% / 4% / 1.4% / 0.6% | 95% | ฿393 | ฿21,780 |
-| Platinum | coming soon | metal | ฿2,325 | 45% / 30% / 19% / 4% / 1.3% / 0.7% | | | |
-| Emerald | coming soon | gem | ฿3,875 | 46% / 30% / 18% / 4% / 1.2% / 0.8% | | | |
-| Diamond | coming soon | gem | ฿7,750 | 47% / 30% / 17% / 4% / 1.2% / 0.8% | | | |
-| Galaxy Opal | coming soon | galaxy | ฿15,500 | 48% / 30% / 16% / 4% / 1.2% / 0.8% | | | |
+| Bronze | live | metal | ฿150 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 102% | ฿80 | ฿3,236 |
+| Silver | live | metal | ฿450 | 44% / 30% / 20% / 4% / 1.4% / 0.6% | 95% | ฿231 | ฿8,406 |
+| Gold | live | metal | ฿750 | 45% / 30% / 19% / 4% / 1.4% / 0.6% | 106% | ฿401 | ฿8,406 |
+| Platinum | sold out | metal | ฿2,325 | 45% / 30% / 19% / 4% / 1.3% / 0.7% | | | |
+| Emerald | sold out | gem | ฿3,875 | 46% / 30% / 18% / 4% / 1.2% / 0.8% | | | |
+| Diamond | sold out | gem | ฿7,750 | 47% / 30% / 17% / 4% / 1.2% / 0.8% | | | |
+| Galaxy Opal | sold out | galaxy | ฿15,500 | 48% / 30% / 16% / 4% / 1.2% / 0.8% | | | |
 
-Average pull, floor and top prize are the Pokémon preview pool's (2026-11-04); One Piece and Lorcana land within a point or two. A live tier whose pool has no floor (D) card for a game is not offered for that game; any other empty class folds downward (see "Only the floor pauses a pack").
+Average pull, floor and top prize are the real stock's on 2026-11-08, with every copy in (`scripts/check-slab-packs.ts` prints them). Gold pays out more than it takes because its one C card (฿574) and its B and A cards (from ฿1,073 and ฿2,773) sit high in their bands; the engine leans the within-class weights toward the cheap end but cannot go below the cheapest card there, so only cheaper cards in those bands or a higher Gold price bring it down. Only Pokémon has stock, so One Piece and Lorcana show no packs and the game switch is hidden. A live tier whose floor (D) class has no cards in stock is greyed out as sold out until restocked; any other empty class folds downward (see "Only the floor pauses a pack").
 
-**One inventory, three packs.** The live packs draw from the same pool: a card sits in every pack whose bands its value falls in (a ฿3,800 card is a Grail in Bronze at 25×, a Monster in Silver at 8.4× and in Gold at 5.1×), so the chase cards are stocked once, not three times. The sourcing list is `docs/specs/digital-rips-card-ladder-2026-11-04.xlsx`: 56 slots from ฿75 to ฿8,200 adding up to ~฿35,700 ($1,000 at the app rate), a fill-in card list, a per-pack view, and live coverage per pack and class. Most of the list sits at ฿75–750, where ex singles live. The preview pool is raw near-mint singles first (`grade: 'raw'`, `grader: 'none'`; the card renders without a grader's label, filling the case like a toploader), with PSA slabs only where singles run thin.
+**One inventory, three packs.** The live packs draw from the same pool: a card sits in every pack whose bands its value falls in (a ฿3,800 card is a Grail in Bronze at 25×, a Monster in Silver at 8.4× and in Gold at 5.1×), so the chase cards are stocked once, not three times. The sourcing list is `docs/specs/digital-rips-card-ladder-2026-11-04.xlsx`: 56 slots from ฿75 to ฿8,200 adding up to ~฿35,700 ($1,000 at the app rate), a fill-in card list, a per-pack view, and live coverage per pack and class. Most of the list sits at ฿75–750, where ex singles live. The stock itself is `lib/slabPacks/inventory.ts`, built from the filled sheet on 2026-11-08 (48 card types, 53 copies, ฿32,477 at the sheet's values; three cards under the Bronze floor raised to ฿80), all raw near-mint singles (`grade: 'raw'`, `grader: 'none'`; the card renders without a grader's label, filling the case like a toploader). Thai cards carry their printed name beside the English one (`localName`) and a THAI mark on a slab label.
 
 Emerald's price is an assumption: the brief listed both Emerald and Diamond at ฿7,750, so Emerald took the ฿775 × 5 step between Platinum and Diamond. It is one constant in `tiers.ts`.
 
@@ -131,13 +131,13 @@ Mobile-first: one 480px column, centred on anything wider. Always dark, whatever
 | Table builder, draw, per-pull fairness proof | Real and tested. `lib/slabPacks/engine.ts`, checked by `scripts/check-slab-packs.ts`. |
 | Money rules: fees, shipping, cash-out, coins | Real as constants. `lib/slabPacks/policy.ts`. |
 | UI, animation, sound, navigation | Real. `components/slabPacks/`. |
-| Slabs | **Stand-in.** Real catalog cards with real PSA 9/10 market prices (`lib/slabPacks/demoPool.ts`, ~700 slabs across the three games), not stock Cardstreet holds. |
+| Cards | **Real stock.** `lib/slabPacks/inventory.ts`: the founder's cards resolved against the catalog (art, set, number) with the sheet's market values. The stock count lives in the browser (`previewStore.ts` `stock`), not in a table yet: a pull takes a copy, a sell-back returns it, Reset puts every copy back. |
 | Card payment | **Simulated**, instant and always successful. |
 | Wallet, ledger, cash-out requests | **Stand-in.** Browser state (`lib/slabPacks/previewStore.ts`). The seed of every pull is generated in the browser, so the fairness proof is demonstrated, not secure. |
 | Identity, address, bank verification | **Mock.** A sheet that "reviews" for a moment and flips a flag. |
 | Marketplace listing, shipment | **Stand-in.** Status on the pull; nothing is posted and nothing moves. |
 | Coins | **Demo balance**, not `rewards.coin_balance`. |
-| Other collectors in the feed | **Simulated**, labelled, and switchable off in the preview menu. |
+| Other collectors in the feed | **Simulated**, labelled, off by default and switchable in the preview menu. They take nothing out of stock. |
 
 ## Connecting to the rest of Cardstreet
 
@@ -176,8 +176,8 @@ Mapped on 2026-10-23 against the live schema. Short answer to "is it ready to co
 
 ## Development
 
-- **Check the mechanics:** `npx tsx scripts/check-slab-packs.ts`. Asserts the class odds and the per-card odds sum to 1, every card sits in its band, the floor, the average pull within 8 points of target, a deterministic table and draw, an honest draw verifying and tampered seeds or commits failing, and 40k draws landing on the published odds. Run it before changing a tier, a band or the engine.
-- **Refresh the preview pool:** `node scripts/slab-packs-preview-pool.mjs --write` (reads PSA 9/10 rows from `market_values` with the public key, keeps mirrored art, samples 10 slabs per game per log-spaced value bucket from Silver's floor to Galaxy Opal's ceiling), then run the check. Re-run it whenever a tier price moves outside the pool's range or a game is added (`PACK_GAMES` in `tiers.ts` and `GAMES` in the script).
+- **Check the mechanics:** `npx tsx scripts/check-slab-packs.ts`. Asserts the class odds and the per-card odds sum to 1, every card sits in its band, the floor, a deterministic table and draw, an honest draw verifying and tampered seeds or commits failing, 40k draws landing on the published odds, the thin-stock folding, and that the stock has no dead card (one no pack on sale can hold). It prints each live pack's average pull and warns when it is more than 8 points from the 95% target, without failing: the engine cannot move an average below what the cards in each band allow. Run it before changing a tier, a band, the engine or the stock.
+- **Add or change stock:** add the card to `ROWS` in `scripts/slab-packs-inventory.mjs` (set id, printed number, language, copies, the sheet's value, an English name when the catalog row has none) and run `node scripts/slab-packs-inventory.mjs --write`. It resolves each row against the catalog (public key from `.env.local`), refuses a row it cannot match or that has no mirrored art, and rewrites `lib/slabPacks/inventory.ts`; then run the check. The preview store merges the new file with the browser's saved counts, so a card added later starts at its full count and the cards already pulled stay pulled.
 - **Look at one opening** (development only): `/packs?demo=opal:ss`, `/packs?demo=silver:d,b,a`, `&auto=1`, `&still=1` ([lib/slabPacks/debug.ts](../../lib/slabPacks/debug.ts)).
 - **Drive it without a phone:** in the desktop app's browser pane a mobile-emulated tap zooms the page instead of pressing; dispatch pointer events from `javascript_tool` for the swipe (see the memory note on browser automation).
 - **Browser floor:** container-query units, `color-mix()` and `dvh`, so iOS 16.2 or later and a current Android WebView.
@@ -187,7 +187,7 @@ Mapped on 2026-10-23 against the live schema. Short answer to "is it ready to co
 
 In rough order of dependency. See [Connecting to the rest of Cardstreet](#connecting-to-the-rest-of-cardstreet) for the schema detail.
 
-1. **Inventory.** Real slabs, each with a cert number, intake photos, cost and custody record. The table builder already takes `Slab[]`; feed it from an inventory table and delete `demoPool.ts`. Stock rules: every class must always have cards; a pulled chase is replaced before the next sale.
+1. **Inventory in the database.** The stock file (`inventory.ts`) is the first step; a real build needs an inventory table (cert number for slabs, intake photos, cost, custody record) with the count taken down server-side on every pull, and the file goes away. The table builder already takes `Slab[]` and the store already counts stock down, so the shape is settled. Stock rules: the floor class of each live pack must stay in stock; a pulled chase folds its chance downward until it is replaced.
 2. **Server-side draws.** `buy` becomes one call that charges the card (or debits wallet / coins), generates the seed server-side, stores the commit with the pull, and returns the pulls. The seed is released at reveal.
 3. **Collection rows** per pull with custody, cert and source columns.
 4. **Wallet ledger, cash-out requests, verification flags** and the ops payout process.

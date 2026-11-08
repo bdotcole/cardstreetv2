@@ -8,11 +8,12 @@
 export type TierKey = 'bronze' | 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond' | 'opal';
 
 /**
- * `live` packs are on sale. A `coming_soon` pack is shown in the lobby at its
- * price but cannot be bought, needs no table, and is never pulled by the
- * simulated collectors.
+ * `live` packs are on sale. A `sold_out` pack is shown in the lobby at its
+ * price, greyed out under a Sold out ribbon: not buyable, no table, never
+ * pulled by the simulated collectors. A live pack whose floor class has no
+ * cards left is shown the same way until it is restocked.
  */
-export type TierStatus = 'live' | 'coming_soon';
+export type TierStatus = 'live' | 'sold_out';
 
 /** The games packs are sold for. Each game has its own pool and its own tables. */
 export type GameKey = 'pokemon' | 'onepiece' | 'lorcana';
@@ -33,13 +34,20 @@ export interface Slab {
     grader: 'PSA' | 'none';
     /** The PSA grade, or `raw` for an ungraded near-mint single (most of the low-price packs). */
     grade: 9 | 10 | 'raw';
+    /** English name, for the label and the lists. */
     name: string;
+    /** The name printed on a Thai or Japanese card, when it differs from `name`. */
+    localName?: string;
     setName: string;
     number: string;
     year: number;
-    lang: 'EN' | 'JP';
+    lang: 'EN' | 'JP' | 'TH';
     rarity: string;
     valueThb: number;
+    /** Copies held when the pool was built. The preview store counts the live figure down as cards are pulled. */
+    stock: number;
+    /** Mirrored card art. When absent the URL is derived from the card id. */
+    image?: { small: string; large: string };
 }
 
 /**
@@ -67,9 +75,10 @@ export interface PackTier {
     status: TierStatus;
     priceThb: number;
     /**
-     * Fixed, published chance that a pack of this tier is each hit class.
-     * Sums to 1. These never move: a pull does not change the odds of the
-     * next pull, and nothing is counted down or marked as gone.
+     * Published chance that a pack of this tier is each hit class. Sums to 1
+     * and is the same for every buyer. The table folds a sold-out class into
+     * the one below it (engine.ts effectiveOdds); that is the only way the
+     * published figure ever differs from this one.
      */
     odds: Record<HitClass, number>;
     /** Share of a slab's market value paid as wallet credit on an instant sell-back. */
@@ -142,6 +151,12 @@ export interface Pull {
     at: number;
     status: PullStatus;
     proof: PullProof;
+    /**
+     * Fingerprint of the stock the draw's table was built from (pool.ts
+     * poolFingerprint), so the draw can be re-run against that exact table
+     * after stock has moved.
+     */
+    stockHash?: string;
     /** Wallet credit received on sell-back. */
     soldForThb?: number;
     /** Marketplace listing, while `status` is 'listed'. */

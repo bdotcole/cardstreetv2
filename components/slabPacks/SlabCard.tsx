@@ -75,7 +75,7 @@ export default function SlabCard({
                                     <div className="sp-slab-label-stripe" />
                                     <div className="sp-slab-label-text">
                                         <span>
-                                            {slab.year > 0 ? `${slab.year} ` : ''}POKEMON{slab.lang === 'JP' ? ' JAPANESE' : ''}
+                                            {slab.year > 0 ? `${slab.year} ` : ''}POKEMON{slab.lang === 'JP' ? ' JAPANESE' : slab.lang === 'TH' ? ' THAI' : ''}
                                         </span>
                                         <span className="sp-slab-label-name">{slab.name}</span>
                                         <span>

@@ -7,7 +7,7 @@
  *
  *   /packs?demo=gold:ss          open one Gold pack that is an SS pull
  *   /packs?demo=bronze:d,b,a     open three cards of those classes in a row
- *                                (live tiers only: a coming-soon pack has no table)
+ *                                (live tiers only: a sold-out pack has no table)
  *   &auto=1                      tear the pack without a finger
  *   &still=1                     no animation: every pose jumps to its end
  *                                state (for tools whose tab never gets an

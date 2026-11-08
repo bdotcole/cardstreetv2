@@ -57,11 +57,13 @@ export default function SlabPacksApp() {
     const [shipPull, setShipPull] = useState<Pull | null>(null);
     const [verifyKind, setVerifyKind] = useState<VerificationKind | null>(null);
 
-    // Each game shows the tiers its pool can fill plus the coming-soon ones;
-    // a live tier the game lacks is skipped, and the selection falls back to
-    // the game's cheapest pack. A coming-soon tier has no table.
-    const games = useMemo(() => availableGames(), []);
-    const tiers = useMemo(() => offeredTiers(game), [game]);
+    // Every tier is in the carousel; a pack with no table (a sold-out tier, or
+    // a live tier whose floor class has run dry) is greyed out as sold out.
+    // Only games with at least one pack on sale appear. Both are read from the
+    // store on every render: the tables follow the stock in hand, which moves
+    // with every pull and sell-back, and the store caches them by pool.
+    const games = availableGames();
+    const tiers = offeredTiers();
     useEffect(() => {
         if (tiers.length && !tiers.includes(tierKey)) setTierKey(tiers[0]);
     }, [tiers, tierKey]);
@@ -104,7 +106,7 @@ export default function SlabPacksApp() {
         return () => clearInterval(id);
     }, [state.hydrated]);
 
-    const table = useMemo(() => tryTable(game, tierKey), [game, tierKey]);
+    const table = tryTable(game, tierKey);
     const chase = useMemo(() => (table ? topPulls(table, 8) : []), [table]);
 
     // A method the balance cannot cover falls back to the card, which never
@@ -128,7 +130,7 @@ export default function SlabPacksApp() {
                 } else if (res.reason === 'coins') {
                     showToast(t('lobby.needCoins'), 'error');
                 } else if (res.reason === 'unavailable') {
-                    showToast(t('lobby.soonNote'), 'error');
+                    showToast(t('lobby.soldOutNote'), 'error');
                 }
                 return;
             }
@@ -365,7 +367,7 @@ interface LobbyProps {
     tiers: TierKey[];
     tierKey: TierKey;
     onTier: (key: TierKey) => void;
-    /** Null for a coming-soon pack: shown at its price, nothing to buy. */
+    /** Null for a sold-out pack (no stock behind it, or a paused live tier): shown at its price, nothing to buy. */
     table: PackTable | null;
     chase: CardOdds[];
     feed: FeedEvent[];
@@ -436,22 +438,24 @@ function Lobby({
 
             <Ticker feed={feed} onOpen={onFeed} simulated={simulated} />
 
-            {/* Which game the packs are for: each game has its own packs and its own odds. */}
-            <div className="mx-4 mt-2.5 flex shrink-0 gap-1.5 rounded-full border border-white/10 bg-white/5 p-1">
-                {games.map((g) => {
-                    const on = g === game;
-                    return (
-                        <button
-                            key={g}
-                            onClick={() => onGame(g)}
-                            aria-pressed={on}
-                            className={`sp-mini h-9 min-w-0 flex-1 truncate rounded-full px-3 text-[12px] font-extrabold transition-colors ${on ? 'bg-white text-black' : 'text-white/60'}`}
-                        >
-                            {gameLabel(g, isThai)}
-                        </button>
-                    );
-                })}
-            </div>
+            {/* Which game the packs are for: each game has its own packs and its own odds. One game needs no switch. */}
+            {games.length > 1 && (
+                <div className="mx-4 mt-2.5 flex shrink-0 gap-1.5 rounded-full border border-white/10 bg-white/5 p-1">
+                    {games.map((g) => {
+                        const on = g === game;
+                        return (
+                            <button
+                                key={g}
+                                onClick={() => onGame(g)}
+                                aria-pressed={on}
+                                className={`sp-mini h-9 min-w-0 flex-1 truncate rounded-full px-3 text-[12px] font-extrabold transition-colors ${on ? 'bg-white text-black' : 'text-white/60'}`}
+                            >
+                                {gameLabel(g, isThai)}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
 
             <div className="sp-scroll min-h-0 flex-1" style={{ paddingBottom: 'calc(var(--sab) + 212px)' }}>
                 <Carousel tiers={tiers} tierKey={tierKey} onTier={onTier} subtitle={gameLabel(game, isThai)} />
@@ -478,10 +482,10 @@ function Lobby({
                 </div>
 
                 {!table ? (
-                    // Coming soon: the pack stands in the carousel at its price, with nothing to open yet.
+                    // Sold out: the pack stands in the carousel at its price, with nothing to open until it is restocked.
                     <div className="px-5">
                         <div className="sp-card sp-mini mt-3 rounded-[18px] px-4 py-3.5 text-[12.5px] leading-relaxed text-white/60">
-                            {t('lobby.soonNote')}
+                            {t('lobby.soldOutNote')}
                         </div>
                     </div>
                 ) : (
@@ -544,7 +548,7 @@ function Lobby({
             <div className="absolute inset-x-0 z-30 px-4" style={{ bottom: 'calc(var(--sab) + 82px)' }}>
                 {!table ? (
                     <div className="sp-panel flex h-[60px] items-center justify-between gap-3 rounded-[26px] px-5">
-                        <span className="sp-display text-[clamp(17px,5.5vw,22px)] text-white/60">{t('lobby.soon')}</span>
+                        <span className="sp-display text-[clamp(17px,5.5vw,22px)] text-white/60">{t('lobby.soldOut')}</span>
                         <span className="sp-num text-[clamp(15px,4.7vw,19px)] text-white/45">{baht(tier.priceThb)}</span>
                     </div>
                 ) : (
@@ -742,7 +746,7 @@ function Carousel({ tiers, tierKey, onTier, subtitle }: { tiers: TierKey[]; tier
                             label={TIERS[key].name}
                             onPick={() => onTier(key)}
                         >
-                            <PackArt tier={TIERS[key]} subtitle={subtitle} soonLabel={TIERS[key].status === 'live' ? undefined : t('lobby.soon')} />
+                            <PackArt tier={TIERS[key]} subtitle={subtitle} soonLabel={TIERS[key].status === 'live' ? undefined : t('lobby.soldOut')} />
                         </CarouselPack>
                     ))}
                 </motion.div>

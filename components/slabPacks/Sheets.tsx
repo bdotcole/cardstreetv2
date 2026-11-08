@@ -6,7 +6,7 @@ import { Check, ChevronRight, Coins, ExternalLink, Lock, RotateCcw, ShieldCheck,
 import { verifyDraw } from '@/lib/slabPacks/engine';
 import { MARKET_FEE_RATE, PULL_MARKET_FEE_RATE, SHIP_DAYS, listingPayoutThb } from '@/lib/slabPacks/policy';
 import { getSlab, gradeLabel } from '@/lib/slabPacks/pool';
-import { previewActions, tryTable, type PreviewSettings } from '@/lib/slabPacks/previewStore';
+import { previewActions, tableForPull, type PreviewSettings } from '@/lib/slabPacks/previewStore';
 import { sfx } from '@/lib/slabPacks/sfx';
 import { HIT_CLASSES, HIT_ORDER, TIERS, sellBackThb } from '@/lib/slabPacks/tiers';
 import type { CardOdds, HitClass, PackTable, PackTier, Pull } from '@/lib/slabPacks/types';
@@ -214,7 +214,7 @@ function CardRow({ c, first, onClick }: { c: CardOdds; first: boolean; onClick: 
             <div className="min-w-0 flex-1">
                 <div className="truncate text-[12px] font-bold leading-tight">{c.slab.name}</div>
                 <div className="truncate text-[10.5px] text-white/45">
-                    {c.slab.setName} · {gradeLabel(c.slab)}
+                    {c.slab.localName ? `${c.slab.localName} · ` : ''}{c.slab.setName} · {gradeLabel(c.slab)}
                 </div>
             </div>
             <div className="shrink-0 text-right">
@@ -278,7 +278,7 @@ export function CardSheet({ card, tier, onClose }: { card: CardOdds | null; tier
                         </div>
                         <div className="mt-2 text-[20px] font-extrabold leading-tight">{c.slab.name}</div>
                         <div className="text-[12.5px] text-white/55">
-                            {c.slab.setName} · {gradeLabel(c.slab)} · #{c.slab.number}
+                            {c.slab.localName ? `${c.slab.localName} · ` : ''}{c.slab.setName} · {gradeLabel(c.slab)} · #{c.slab.number}
                         </div>
                         <div className="sp-num mt-2 text-[34px] leading-none">{baht(c.slab.valueThb)}</div>
                         <div className="sp-label mt-1.5">{t('stage.marketValue')}</div>
@@ -316,10 +316,12 @@ export function SlabSheet({
     const slab = p ? getSlab(p.slabKey) : undefined;
     const tier = p ? TIERS[p.tier] : null;
     // The check a buyer can run: the seed hashes to the commit shown before
-    // the rip, and re-running the draw with it lands on this card.
+    // the rip, and re-running the draw against the table the pack was drawn
+    // from lands on this card. Null when there is nothing to check against
+    // (a demo pull, or a stock snapshot that has aged out).
     const verified = useMemo(() => {
         if (!p || !slab || p.id.startsWith('demo-')) return null;
-        const table = tryTable(slab.game, p.tier);
+        const table = tableForPull(p);
         return table ? verifyDraw(table, p.proof.seed, p.proof.clientSeed, p.proof.commit, p.slabKey) : null;
     }, [p, slab]);
     const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' });
@@ -347,7 +349,7 @@ export function SlabSheet({
                         </div>
                         <div className="mt-2 text-[20px] font-extrabold leading-tight">{slab.name}</div>
                         <div className="text-[12.5px] text-white/55">
-                            {slab.setName} · {gradeLabel(slab)} · #{slab.number}
+                            {slab.localName ? `${slab.localName} · ` : ''}{slab.setName} · {gradeLabel(slab)} · #{slab.number}
                         </div>
                         <div className="sp-num mt-2 text-[34px] leading-none">{baht(slab.valueThb)}</div>
                         <div className="sp-label mt-1.5">{t('stage.marketValue')}</div>
