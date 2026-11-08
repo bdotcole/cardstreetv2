@@ -73,3 +73,63 @@ export function shipByDate(createdAt: string | null | undefined): Date | null {
     if (!Number.isFinite(t)) return null;
     return new Date(t + HANDLING_DAYS * 864e5);
 }
+
+/**
+ * Seller non-performance ladder (the seller-ships-we-track model, 2026-11).
+ * Reminders go out at 24/48/72h (app/api/cron/ship-reminders). From
+ * BUYER_CANCEL_AFTER_DAYS the buyer may cancel for an automatic refund
+ * (/api/orders/cancel-unshipped); at AUTO_CANCEL_AFTER_DAYS the
+ * cancel-unshipped-orders cron refunds on its own. Both run through
+ * lib/orderRefunds. A parcel the seller shipped themselves with no tracking
+ * signal auto-completes AUTO_COMPLETE_AFTER_DAYS after it was marked shipped
+ * (reconcile-shipments), unless the buyer reported it first.
+ */
+export const BUYER_CANCEL_AFTER_DAYS = 4;
+export const AUTO_CANCEL_AFTER_DAYS = 5;
+export const AUTO_COMPLETE_AFTER_DAYS = 14;
+
+/** Order statuses in which nothing has left the seller yet. */
+export const UNSHIPPED_STATUSES = ['paid', 'processing', 'label_generated'];
+
+/** Label statuses that mean no carrier has scanned the parcel. */
+const UNSCANNED_LABEL_STATUSES = ['created', 'awaiting_manual'];
+
+export interface UnshippedCheckLabel {
+    tracking_number?: string | null;
+    status?: string | null;
+    handed_off_at?: string | null;
+}
+
+/**
+ * Paid, and the parcel has not left: no Flash scan of any label the seller
+ * minted, and the seller has not said it shipped another way. A label row by
+ * itself is not shipping; most label_generated parcels are still on the
+ * seller's desk.
+ */
+export function isUnshippedOrder(
+    order: { status: string; break_spot_id?: string | null },
+    label: UnshippedCheckLabel | null | undefined,
+): boolean {
+    if (order.break_spot_id) return false;
+    if (!UNSHIPPED_STATUSES.includes(order.status)) return false;
+    if (!label) return true;
+    if (label.handed_off_at) return false;
+    return !label.status || UNSCANNED_LABEL_STATUSES.includes(label.status);
+}
+
+/** The moment a buyer may cancel an unshipped order themselves, or null for an unparseable timestamp. */
+export function buyerCancelDate(createdAt: string | null | undefined): Date | null {
+    const t = createdAt ? Date.parse(createdAt) : NaN;
+    if (!Number.isFinite(t)) return null;
+    return new Date(t + BUYER_CANCEL_AFTER_DAYS * 864e5);
+}
+
+export function canBuyerCancelUnshipped(
+    order: { status: string; created_at: string | null | undefined; break_spot_id?: string | null },
+    label: UnshippedCheckLabel | null | undefined,
+    now: number = Date.now(),
+): boolean {
+    if (!isUnshippedOrder(order, label)) return false;
+    const due = buyerCancelDate(order.created_at);
+    return !!due && due.getTime() <= now;
+}

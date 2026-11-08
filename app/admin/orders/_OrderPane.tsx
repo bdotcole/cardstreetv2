@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
     FLAG_TONE_CLASS, ORDER_STATUS_TONE, flashTrackingUrl, personName, statusLabel,
     type AdminContact, type AdminOrderDetail,
@@ -9,12 +9,19 @@ import { Spinner, StatusChip, initials } from '../inbox/_parts'
 
 // One order for the support team: what was bought, where the parcel is, who
 // the buyer and seller are and how to reach them, and every ticket or chat
-// already open with either of them. Read-only; the actions live where they
-// were (problem reports close on their ticket in the inbox, bans on User
-// Reports), each one a link away.
+// already open with either of them. One write: Cancel and refund
+// (/api/admin/orders/[id]/refund -> lib/orderRefunds), which used to be a
+// Stripe dashboard refund plus hand-written SQL every time. Everything else
+// stays where it was (problem reports close on their ticket in the inbox,
+// bans on User Reports), each one a link away.
 
 const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : null)
 const baht = (n: number) => `฿${Math.round(n).toLocaleString()}`
+
+// Statuses lib/orderRefunds accepts from an admin: paid through delivered,
+// and a disputed order. Completed orders have released funds; pending ones
+// have no money to return.
+const REFUNDABLE = new Set(['paid', 'processing', 'label_generated', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'disputed'])
 
 export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
     orderId: string
@@ -24,24 +31,69 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
 }) {
     const [order, setOrder] = useState<AdminOrderDetail | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [refundOpen, setRefundOpen] = useState(false)
+    const [refundNote, setRefundNote] = useState('')
+    const [refundScope, setRefundScope] = useState<'order' | 'checkout'>('order')
+    const [alreadyRefunded, setAlreadyRefunded] = useState(false)
+    const [refundBusy, setRefundBusy] = useState(false)
+    const [refundError, setRefundError] = useState<string | null>(null)
+
+    const load = useCallback(async (signal?: { cancelled: boolean }) => {
+        try {
+            const res = await fetch(`/api/admin/orders/${orderId}`, { cache: 'no-store' })
+            if (signal?.cancelled) return
+            if (!res.ok) {
+                setError(res.status === 404 ? 'That order was not found.' : `Could not load the order (${res.status}).`)
+                return
+            }
+            const data = await res.json()
+            if (!signal?.cancelled) setOrder(data.order)
+        } catch {
+            if (!signal?.cancelled) setError('Could not load the order.')
+        }
+    }, [orderId])
 
     useEffect(() => {
-        let cancelled = false
+        const signal = { cancelled: false }
         setOrder(null)
         setError(null)
-        fetch(`/api/admin/orders/${orderId}`, { cache: 'no-store' })
-            .then(async res => {
-                if (cancelled) return
-                if (!res.ok) {
-                    setError(res.status === 404 ? 'That order was not found.' : `Could not load the order (${res.status}).`)
-                    return
-                }
-                const data = await res.json()
-                if (!cancelled) setOrder(data.order)
+        setRefundOpen(false)
+        setRefundError(null)
+        void load(signal)
+        return () => { signal.cancelled = true }
+    }, [orderId, load])
+
+    const submitRefund = async () => {
+        if (!order || refundBusy) return
+        const what = refundScope === 'checkout' && order.checkoutSize > 1
+            ? `all ${order.checkoutSize} orders in this checkout`
+            : `order #${order.shortId}`
+        const money = alreadyRefunded
+            ? 'No new Stripe refund is made; the order is recorded as refunded.'
+            : "The buyer is refunded from the seller's Stripe balance."
+        if (!window.confirm(`Cancel and refund ${what}? ${money} This cannot be undone.`)) return
+        setRefundBusy(true)
+        setRefundError(null)
+        try {
+            const res = await fetch(`/api/admin/orders/${orderId}/refund`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ note: refundNote, scope: refundScope, alreadyRefunded }),
             })
-            .catch(() => { if (!cancelled) setError('Could not load the order.') })
-        return () => { cancelled = true }
-    }, [orderId])
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                setRefundError(data?.error || `Refund failed (${res.status})`)
+                return
+            }
+            setRefundOpen(false)
+            setRefundNote('')
+            await load()
+        } catch (e) {
+            setRefundError(e instanceof Error ? e.message : 'Refund failed')
+        } finally {
+            setRefundBusy(false)
+        }
+    }
 
     if (error) return <p className="text-center text-rose-300 text-sm py-10">{error}</p>
     if (!order) return <Spinner size="h-8 w-8" />
@@ -156,6 +208,60 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
                         <p className="text-xs text-slate-300">
                             <i className="fa-solid fa-star mr-1.5 text-amber-300" />Buyer left {order.review.rating}/5{order.review.comment ? `: “${order.review.comment}”` : ''}
                         </p>
+                    )}
+                </div>
+            )}
+
+            {/* Cancel and refund: Stripe refund from the seller's balance (our fee
+                goes back too), order cancelled, card out of the buyer's collection
+                when nothing shipped, both sides notified. Idempotent per order. */}
+            {REFUNDABLE.has(order.status) && !order.refund && (
+                <div className="glass rounded-2xl border border-white/10 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cancel and refund</p>
+                        {!refundOpen && (
+                            <button onClick={() => setRefundOpen(true)} className="text-xs font-bold text-rose-300 hover:text-rose-200 transition-colors">
+                                <i className="fa-solid fa-rotate-left mr-1.5" />Cancel and refund…
+                            </button>
+                        )}
+                    </div>
+                    {refundOpen && (
+                        <div className="space-y-2">
+                            <input
+                                value={refundNote}
+                                onChange={e => setRefundNote(e.target.value)}
+                                maxLength={500}
+                                placeholder="Reason, kept on the refund record (not shown to the customer)"
+                                className="w-full h-10 rounded-xl bg-black/30 border border-white/10 px-3 text-sm text-white placeholder:text-slate-600 outline-none focus:border-brand-cyan/50"
+                            />
+                            {order.checkoutSize > 1 && (
+                                <label className="flex items-center gap-2 text-xs text-slate-300">
+                                    <input type="checkbox" checked={refundScope === 'checkout'} onChange={e => setRefundScope(e.target.checked ? 'checkout' : 'order')} />
+                                    Refund all {order.checkoutSize} orders in this checkout
+                                </label>
+                            )}
+                            <label className="flex items-center gap-2 text-xs text-slate-300">
+                                <input type="checkbox" checked={alreadyRefunded} onChange={e => setAlreadyRefunded(e.target.checked)} />
+                                Already refunded in the Stripe dashboard (record it, make no new refund)
+                            </label>
+                            {refundError && <p className="text-xs text-rose-300">{refundError}</p>}
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={submitRefund}
+                                    disabled={refundBusy}
+                                    className="h-9 px-4 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs font-bold hover:bg-rose-500/30 transition-colors disabled:opacity-50"
+                                >
+                                    {refundBusy ? 'Refunding…' : 'Confirm cancel and refund'}
+                                </button>
+                                <button
+                                    onClick={() => { setRefundOpen(false); setRefundError(null) }}
+                                    disabled={refundBusy}
+                                    className="h-9 px-3 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                                >
+                                    Keep the order
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
             )}

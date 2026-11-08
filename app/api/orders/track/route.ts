@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 import { trackShipment, mapFlashStateToStatus } from '@/lib/flashExpress'
+import { publicTrackingUrl } from '@/lib/carriers'
 
 export async function GET(request: NextRequest) {
     const supabase = await createClient()
@@ -51,21 +52,26 @@ export async function GET(request: NextRequest) {
         }
 
         // The seller shipped this parcel outside our waybill (lib/parcels
-        // handOffParcel): Flash has nothing to say about it, so report what
-        // the seller told us instead of a permanent state 0. Same shape as
-        // the unscanned branch below so the client sweeps stay unchanged.
+        // handOffParcel / shipSelf): Flash has nothing to say about it, so
+        // report what the seller told us plus the carrier's own page (or
+        // 17TRACK's), and the last status 17TRACK gave us (lib/externalTracking).
+        // Same shape as the unscanned branch below so the client sweeps stay
+        // unchanged.
         if (label.handed_off_at) {
+            const carrier = label.handoff_carrier || label.carrier_name
             return NextResponse.json({
                 tracking: null,
                 order: { status: order.status },
                 label: {
-                    carrier: label.handoff_carrier || label.carrier_name,
+                    carrier,
                     trackingNumber: label.handoff_tracking_number || null,
                     labelUrl: label.label_url,
-                    trackingUrl: null,
+                    trackingUrl: publicTrackingUrl(carrier, label.handoff_tracking_number),
                     status: label.status,
                     pickupStatus: label.pickup_status,
                     handedOffAt: label.handed_off_at,
+                    externalStatus: label.track17_status ?? null,
+                    externalCheckedAt: label.track17_checked_at ?? null,
                 },
             })
         }

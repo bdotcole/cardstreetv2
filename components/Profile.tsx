@@ -41,8 +41,8 @@ import { useBetaFeatures } from '@/lib/hooks/useBetaFeatures';
 import { getThumbnailUrl } from '@/lib/imageUtils';
 import OrderCardMeta from './OrderCardMeta';
 import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
-import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
-import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo, type RecipientInfo } from '@/components/ParcelHandoff';
+import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate, canBuyerCancelUnshipped, isUnshippedOrder, buyerCancelDate } from '@/lib/orderDisputes';
 import ReviewSheet from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
@@ -170,7 +170,7 @@ interface Order {
   // Seller shipments only: who the parcel goes to, so parcels for the same
   // buyer can be spotted (and combined) at a glance.
   buyer_id?: string | null;
-  buyer?: { display_name: string | null } | null;
+  buyer?: { display_name: string | null; phone?: string | null; address?: string | null } | null;
   listing: {
     card_data: any;
     condition: string;
@@ -995,9 +995,62 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
     }
   };
 
-  // Note: the only seller-side "ship" action is "Shipped another way" above,
-  // for a parcel that left without a Flash scan. Labels come from Create
-  // label (lib/parcels); sellers print and hand the parcel to Flash.
+  // Ship it myself: the seller took the cards to any counter (a Flash Home,
+  // Kerry, J&T, the post office), paid there, and enters the number it gave
+  // them (lib/parcels shipSelf). No Flash label is minted; the buyer is told
+  // and 17TRACK follows the number. The sheet shows the buyer's address and
+  // phone for the counter's form.
+  const [selfShipSheet, setSelfShipSheet] = useState<{ orderIds: string[]; recipient: RecipientInfo | null } | null>(null);
+  const [selfShipBusy, setSelfShipBusy] = useState(false);
+  const shipSelf = async (orderIds: string[], carrier: string, trackingNumber: string) => {
+    setSelfShipBusy(true);
+    try {
+      const res = await fetch('/api/orders/label/self-ship', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ orderIds, carrier, trackingNumber }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(t(data?.code === 'TRACKING_REQUIRED' ? 'parcel.trackingRequired' : 'parcel.shipSelfFailed'), 'error');
+        return;
+      }
+      setSelfShipSheet(null);
+      showToast(t('parcel.shipSelfDone'), 'success');
+      await fetchShipments();
+    } catch (err) {
+      console.error('Self-ship failed:', err);
+      showToast(t('parcel.shipSelfFailed'), 'error');
+    } finally {
+      setSelfShipBusy(false);
+    }
+  };
+
+  // Buyer: cancel an order the seller has not shipped (lib/orderDisputes
+  // canBuyerCancelUnshipped) for an automatic refund (lib/orderRefunds).
+  const [cancelBusyGroup, setCancelBusyGroup] = useState<string | null>(null);
+  const cancelUnshipped = async (transferGroup: string) => {
+    if (!window.confirm(t('orderActions.cancelUnshippedConfirm'))) return;
+    setCancelBusyGroup(transferGroup);
+    try {
+      const res = await fetch('/api/orders/cancel-unshipped', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ transferGroup }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'cancel failed');
+      showToast(t('orderActions.cancelUnshippedDone'), 'success');
+      await fetchOrders();
+    } catch (err) {
+      console.error('Cancel unshipped failed:', err);
+      showToast(t('orderActions.cancelUnshippedFailed'), 'error');
+    } finally {
+      setCancelBusyGroup(null);
+    }
+  };
 
   const openLabel = async (orderId: string) => {
     setLabelModal({ orderId, savedUri: null, savedFilename: null, loading: true, error: null });
@@ -2152,6 +2205,27 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                           {t('orderActions.receivedEarly')}
                         </button>
                       )}
+                      {/* Seller has not shipped: from day four the buyer may cancel for an
+                          automatic refund (lib/orderDisputes, lib/orderRefunds). Before
+                          that, say when they can. */}
+                      {!order.break_spot_id && group.every((o) => isUnshippedOrder(o, o.shipping_labels?.[0])) && (
+                        group.every((o) => canBuyerCancelUnshipped(o, o.shipping_labels?.[0])) ? (
+                          <button
+                            onClick={() => order.transfer_group && cancelUnshipped(order.transfer_group)}
+                            disabled={cancelBusyGroup === order.transfer_group || !order.transfer_group}
+                            className="w-full h-10 mt-2 border border-rose-500/40 text-rose-300 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {t('orderActions.cancelUnshipped')}
+                          </button>
+                        ) : (() => {
+                          const at = buyerCancelDate(order.created_at);
+                          return at ? (
+                            <p className="text-[11px] text-slate-500 mt-2">
+                              {t('orderActions.cancelUnshippedHint').replace('{date}', at.toLocaleDateString(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' }))}
+                            </p>
+                          ) : null;
+                        })()
+                      )}
 
                       {/* Review and report live here too, so an order that completed
                           on its own (the 48h auto-release) still has both paths. */}
@@ -2688,6 +2762,20 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                                 {labelBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                 {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
                               </button>
+                              <button
+                                onClick={() => setSelfShipSheet({
+                                  orderIds: group.map((o) => o.id),
+                                  recipient: shipment.buyer
+                                    ? { name: shipment.buyer.display_name ?? null, phone: shipment.buyer.phone ?? null, address: shipment.buyer.address ?? null }
+                                    : null,
+                                })}
+                                disabled={labelBusy}
+                                className="w-full h-10 flex items-center justify-center gap-2 bg-white/5 text-slate-200 border border-white/10 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-white/10 transition-colors disabled:opacity-50"
+                              >
+                                <i className="fa-solid fa-truck-fast opacity-70"></i>
+                                {t('parcel.shipSelf')}
+                              </button>
+                              <p className="text-[11px] text-slate-500 leading-relaxed">{t('parcel.shipSelfHint')}</p>
                               {otherUnlabelled.length > 0 && (
                                 <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 p-3 space-y-2">
                                   <p className="text-brand-cyan text-xs font-bold">
@@ -3240,6 +3328,15 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
           busy={handoffBusy}
           onClose={() => setHandoffSheet(null)}
           onSubmit={(carrier, trackingNumber) => handOffParcel(handoffSheet.orderIds, carrier, trackingNumber)}
+        />
+      )}
+      {selfShipSheet && (
+        <ShippedElsewhereSheet
+          mode="self"
+          recipient={selfShipSheet.recipient}
+          busy={selfShipBusy}
+          onClose={() => setSelfShipSheet(null)}
+          onSubmit={(carrier, trackingNumber) => shipSelf(selfShipSheet.orderIds, carrier, trackingNumber)}
         />
       )}
     </div>

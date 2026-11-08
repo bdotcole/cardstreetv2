@@ -4,6 +4,7 @@ import React from 'react';
 import BodyPortal from './BodyPortal';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { handoffOf, pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type HandoffFields, type ShipMethod } from '@/lib/orderGroups';
+import { CARRIERS, isByHand } from '@/lib/carriers';
 
 /**
  * How a seller's parcel reaches Flash, for both shells (mobile Pending
@@ -29,9 +30,10 @@ export interface PickupInfo {
     phone: string | null;
 }
 
-// Search rather than a branch-locator URL: it opens the maps app on phones
-// and keeps working if Flash moves its own locator page.
-const FLASH_BRANCH_SEARCH_URL = 'https://www.google.com/maps/search/?api=1&query=Flash+Express';
+// Flash's own locator lists official branches only. A maps search for
+// "Flash Express" returns Flash Home franchise shops too, and those have
+// refused parcels carrying our API labels (2026-11).
+const FLASH_BRANCH_SEARCH_URL = 'https://www.flashexpress.co.th/fle/location';
 
 async function openFlashBranchSearch() {
     try {
@@ -223,25 +225,48 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhe
     );
 }
 
-// Carriers a Thai seller is likely to have used instead of our waybill;
-// tapping one fills the field, and free text covers everything else.
-const HANDOFF_CARRIERS = ['Flash Express', 'Kerry Express', 'Thailand Post', 'J&T Express'];
 export const HANDOFF_FIELD_MAX = 60;
 
+/** The buyer's details a seller copies onto the counter's form (self mode). */
+export interface RecipientInfo {
+    name: string | null;
+    phone: string | null;
+    address: string | null;
+}
+
 /**
- * "Shipped another way": the seller names the carrier the parcel left with
- * and, if they have one, its tracking number. Submitting moves the order to
- * shipped and tells the buyer (lib/parcels handOffParcel).
+ * Two jobs, one sheet. 'self': the seller shipped a PAID order themselves,
+ * from any counter, and enters the number it gave them (lib/parcels
+ * shipSelf; the buyer's address and phone are shown so they can fill the
+ * form, and the number is required unless the cards were handed over in
+ * person). 'elsewhere': a parcel that already had our Flash label left
+ * another way (lib/parcels handOffParcel; the number is optional). Carrier
+ * chips come from lib/carriers so the same names reach 17TRACK; free text
+ * covers everything else.
  */
-export function ShippedElsewhereSheet({ busy, onSubmit, onClose }: {
+export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhere', recipient = null }: {
     busy: boolean;
     onSubmit: (carrier: string, trackingNumber: string) => void;
     onClose: () => void;
+    mode?: 'elsewhere' | 'self';
+    recipient?: RecipientInfo | null;
 }) {
-    const { t } = useTranslation();
+    const { t, isThai } = useTranslation();
     const [carrier, setCarrier] = React.useState('');
     const [trackingNumber, setTrackingNumber] = React.useState('');
-    const canSubmit = carrier.trim().length > 0 && !busy;
+    const [copied, setCopied] = React.useState(false);
+    const needsNumber = mode === 'self' && !isByHand(carrier);
+    const canSubmit = carrier.trim().length > 0 && (!needsNumber || trackingNumber.trim().length > 0) && !busy;
+    const copyRecipient = async () => {
+        const text = [recipient?.name, recipient?.phone, recipient?.address].filter(Boolean).join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // Clipboard blocked (http, old WebView): the details are on screen anyway.
+        }
+    };
     const inputClass =
         'w-full h-11 rounded-xl bg-black/30 border border-white/10 px-3 text-sm text-white placeholder:text-slate-600 outline-none focus:border-brand-cyan/50';
 
@@ -266,31 +291,47 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose }: {
                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-green to-brand-cyan"></div>
                 <div className="flex justify-between items-start gap-3">
                     <h3 id="shipped-elsewhere-title" className="text-lg font-black text-white leading-tight">
-                        {t('parcel.shippedElsewhereTitle')}
+                        {t(mode === 'self' ? 'parcel.shipSelfTitle' : 'parcel.shippedElsewhereTitle')}
                     </h3>
                     <button type="button" onClick={onClose} disabled={busy} aria-label={t('orderActions.cancel')} className="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
                         <i className="fa-solid fa-xmark text-slate-400"></i>
                     </button>
                 </div>
-                <p className="text-slate-400 text-sm leading-relaxed">{t('parcel.shippedElsewhereIntro')}</p>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                    {t(mode === 'self' ? 'parcel.shipSelfIntro' : 'parcel.shippedElsewhereIntro')}
+                </p>
+
+                {mode === 'self' && recipient && (recipient.name || recipient.phone || recipient.address) && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('parcel.recipientLabel')}</p>
+                            <button type="button" onClick={copyRecipient} className="text-brand-cyan text-xs font-bold hover:text-white transition-colors">
+                                {copied ? t('parcel.copied') : t('parcel.copyAddress')}
+                            </button>
+                        </div>
+                        {recipient.name && <p className="text-sm text-white font-bold">{recipient.name}</p>}
+                        {recipient.phone && <p className="text-sm text-slate-200 font-mono">{recipient.phone}</p>}
+                        {recipient.address && <p className="text-sm text-slate-300 leading-relaxed">{recipient.address}</p>}
+                    </div>
+                )}
 
                 <div className="space-y-2">
                     <label htmlFor="handoff-carrier" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
                         {t('parcel.carrierLabel')}
                     </label>
                     <div className="flex flex-wrap gap-2">
-                        {HANDOFF_CARRIERS.map((name) => (
+                        {CARRIERS.map((c) => (
                             <button
-                                key={name}
+                                key={c.id}
                                 type="button"
-                                onClick={() => setCarrier(name)}
+                                onClick={() => setCarrier(c.name)}
                                 className={`h-8 px-3 rounded-full border text-xs font-bold transition-colors ${
-                                    carrier === name
+                                    carrier === c.name
                                         ? 'bg-brand-cyan/20 border-brand-cyan/40 text-brand-cyan'
                                         : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                                 }`}
                             >
-                                {name}
+                                {isThai ? c.nameTh : c.name}
                             </button>
                         ))}
                     </div>
@@ -307,7 +348,7 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose }: {
 
                 <div className="space-y-2">
                     <label htmlFor="handoff-tracking" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        {t('parcel.handoffTrackingLabel')}
+                        {t(needsNumber ? 'parcel.trackingLabelRequired' : 'parcel.handoffTrackingLabel')}
                     </label>
                     <input
                         id="handoff-tracking"
@@ -317,6 +358,7 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose }: {
                         placeholder={t('parcel.handoffTrackingPlaceholder')}
                         className={`${inputClass} font-mono`}
                         autoComplete="off"
+                        required={needsNumber}
                     />
                 </div>
 
@@ -325,7 +367,7 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose }: {
                     disabled={!canSubmit}
                     className="w-full h-11 rounded-xl bg-brand-cyan text-black font-bold text-sm hover:bg-brand-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    {busy ? t('parcel.shippedElsewhereBusy') : t('parcel.shippedElsewhereConfirm')}
+                    {busy ? t('parcel.shippedElsewhereBusy') : t(mode === 'self' ? 'parcel.shipSelfConfirm' : 'parcel.shippedElsewhereConfirm')}
                 </button>
             </form>
         </div>

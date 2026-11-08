@@ -61,20 +61,32 @@ export async function GET(request: NextRequest) {
 
         // The buyer's display name, so a seller with several parcels can see
         // at a glance which ones go to the same person (and label them together via
-        // /api/orders/label/create). Name only; fails soft to no name.
+        // /api/orders/label/create). While the parcel has not left, the buyer's
+        // phone and address come too: a seller who ships it themselves (Ship it
+        // myself) copies them onto the counter's form, the same details the
+        // Flash label would have printed. Fails soft to no name.
         const buyerIds = [...new Set(withBreakContext.map((s: any) => s.buyer_id).filter(Boolean))] as string[]
-        const buyerNames = new Map<string, string | null>()
+        const buyerProfiles = new Map<string, any>()
         if (buyerIds.length > 0) {
             const { data: buyers } = await admin
                 .from('profiles')
-                .select('id, display_name')
+                .select(SHIPPING_PROFILE_COLS)
                 .in('id', buyerIds)
-            for (const b of buyers || []) buyerNames.set(b.id, b.display_name ?? null)
+            for (const b of (buyers || []) as any[]) buyerProfiles.set(b.id, b)
         }
-        const withBuyer = withBreakContext.map((s: any) => ({
-            ...s,
-            buyer: { display_name: buyerNames.get(s.buyer_id) ?? null },
-        }))
+        const UNSHIPPED = ['paid', 'processing', 'label_generated']
+        const withBuyer = withBreakContext.map((s: any) => {
+            const b = buyerProfiles.get(s.buyer_id)
+            const showContact = !!b && UNSHIPPED.includes(s.status) && !s.break_spot_id
+            return {
+                ...s,
+                buyer: {
+                    display_name: b?.display_name ?? null,
+                    phone: showContact ? (b.phone_number || null) : null,
+                    address: showContact ? formatPickupAddress(b) : null,
+                },
+            }
+        })
 
         // Where a Flash courier would collect from, shown before the seller
         // books one so nobody is surprised by who turns up where.

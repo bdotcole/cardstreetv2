@@ -14,9 +14,9 @@ import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerFeeOf, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
-import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo } from '@/components/ParcelHandoff';
+import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo, type RecipientInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
-import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate } from '@/lib/orderDisputes';
+import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate, canBuyerCancelUnshipped, isUnshippedOrder, buyerCancelDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
 import ReportProblemSheet from '@/components/ReportProblemSheet';
 
@@ -48,7 +48,7 @@ interface OrderRow {
     break_context?: { title: string; imageSmall: string | null } | null;
     // Seller shipments only: who the parcel goes to (see /api/profile/shipments).
     buyer_id?: string | null;
-    buyer?: { display_name: string | null } | null;
+    buyer?: { display_name: string | null; phone?: string | null; address?: string | null } | null;
     listing: { card_data: any; condition: string } | null;
     shipping_labels?: {
         tracking_number?: string | null;
@@ -502,6 +502,61 @@ export default function DesktopOrders() {
         }
     };
 
+    // Ship it myself: the seller took the cards to any counter (a Flash Home,
+    // Kerry, J&T, the post office), paid there, and enters the number it gave
+    // them (lib/parcels shipSelf). No Flash label is minted; the buyer is told
+    // and 17TRACK follows the number. The sheet shows the buyer's address and
+    // phone for the counter's form.
+    const [selfShipSheet, setSelfShipSheet] = useState<{ orderIds: string[]; recipient: RecipientInfo | null } | null>(null);
+    const [selfShipBusy, setSelfShipBusy] = useState(false);
+    const shipSelf = async (orderIds: string[], carrier: string, trackingNumber: string) => {
+        setSelfShipBusy(true);
+        try {
+            const res = await fetch('/api/orders/label/self-ship', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderIds, carrier, trackingNumber }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(t(data?.code === 'TRACKING_REQUIRED' ? 'parcel.trackingRequired' : 'parcel.shipSelfFailed'), 'error');
+                return;
+            }
+            setSelfShipSheet(null);
+            showToast(t('parcel.shipSelfDone'), 'success');
+            await fetchTab('shipments');
+        } catch (err) {
+            console.error('Self-ship failed:', err);
+            showToast(t('parcel.shipSelfFailed'), 'error');
+        } finally {
+            setSelfShipBusy(false);
+        }
+    };
+
+    // Buyer: cancel an order the seller has not shipped (lib/orderDisputes
+    // canBuyerCancelUnshipped) for an automatic refund (lib/orderRefunds).
+    const [cancelBusyGroup, setCancelBusyGroup] = useState<string | null>(null);
+    const cancelUnshipped = async (transferGroup: string) => {
+        if (!window.confirm(t('orderActions.cancelUnshippedConfirm'))) return;
+        setCancelBusyGroup(transferGroup);
+        try {
+            const res = await fetch('/api/orders/cancel-unshipped', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transferGroup }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || 'cancel failed');
+            showToast(t('orderActions.cancelUnshippedDone'), 'success');
+            await fetchTab('purchases');
+        } catch (err) {
+            console.error('Cancel unshipped failed:', err);
+            showToast(t('orderActions.cancelUnshippedFailed'), 'error');
+        } finally {
+            setCancelBusyGroup(null);
+        }
+    };
+
     const openLabel = async (orderId: string) => {
         try {
             const res = await fetch(`/api/orders/${orderId}/label/url`, { method: 'POST' });
@@ -680,6 +735,26 @@ export default function DesktopOrders() {
                                                             {t('orderActions.receivedEarly')}
                                                         </button>
                                                     )}
+                                                    {/* Seller has not shipped: from day four the buyer may cancel for
+                                                        an automatic refund (lib/orderDisputes, lib/orderRefunds). */}
+                                                    {!order.break_spot_id && group.every((o) => isUnshippedOrder(o, o.shipping_labels?.[0])) && (
+                                                        group.every((o) => canBuyerCancelUnshipped(o, o.shipping_labels?.[0])) ? (
+                                                            <button
+                                                                onClick={() => order.transfer_group && cancelUnshipped(order.transfer_group)}
+                                                                disabled={cancelBusyGroup === order.transfer_group || !order.transfer_group}
+                                                                className="inline-flex items-center justify-center gap-2 border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 text-xs font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                                                            >
+                                                                {t('orderActions.cancelUnshipped')}
+                                                            </button>
+                                                        ) : (() => {
+                                                            const at = buyerCancelDate(order.created_at);
+                                                            return at ? (
+                                                                <p className="text-[11px] text-slate-500 text-right max-w-[220px]">
+                                                                    {t('orderActions.cancelUnshippedHint').replace('{date}', at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }))}
+                                                                </p>
+                                                            ) : null;
+                                                        })()
+                                                    )}
                                                     {/* Review and report live here so a buyer whose order
                                                         completed on its own still has both paths. */}
                                                     {canReviewOrder(order) && order.status !== 'disputed' && (
@@ -794,14 +869,30 @@ export default function DesktopOrders() {
                                             {t('desktop.orders.liveBreakShipsWithParcel')}
                                         </span>
                                     ) : awaitingLabel ? (
-                                        <button
-                                            onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
-                                            disabled={labelBusy}
-                                            className={BTN_GREEN}
-                                        >
-                                            <i className="fa-solid fa-tag"></i>
-                                            {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
+                                                disabled={labelBusy}
+                                                className={BTN_GREEN}
+                                            >
+                                                <i className="fa-solid fa-tag"></i>
+                                                {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                                            </button>
+                                            <button
+                                                onClick={() => setSelfShipSheet({
+                                                    orderIds: group.map((o) => o.id),
+                                                    recipient: order.buyer
+                                                        ? { name: order.buyer.display_name ?? null, phone: order.buyer.phone ?? null, address: order.buyer.address ?? null }
+                                                        : null,
+                                                })}
+                                                disabled={labelBusy}
+                                                className={BTN_SECONDARY}
+                                                title={t('parcel.shipSelfHint')}
+                                            >
+                                                <i className="fa-solid fa-truck-fast text-slate-400"></i>
+                                                {t('parcel.shipSelf')}
+                                            </button>
+                                        </>
                                     ) : handoffOf(order.shipping_labels?.[0]) ? null : (
                                         // A parcel shipped another way never used this label.
                                         <button onClick={() => openLabel(order.id)} className={BTN_SECONDARY}>
@@ -1128,6 +1219,15 @@ export default function DesktopOrders() {
                     busy={handoffBusy}
                     onClose={() => setHandoffSheet(null)}
                     onSubmit={(carrier, trackingNumber) => handOffParcel(handoffSheet.orderIds, carrier, trackingNumber)}
+                />
+            )}
+            {selfShipSheet && (
+                <ShippedElsewhereSheet
+                    mode="self"
+                    recipient={selfShipSheet.recipient}
+                    busy={selfShipBusy}
+                    onClose={() => setSelfShipSheet(null)}
+                    onSubmit={(carrier, trackingNumber) => shipSelf(selfShipSheet.orderIds, carrier, trackingNumber)}
                 />
             )}
         </div>
