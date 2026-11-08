@@ -768,6 +768,8 @@
             "payoutsOpening": "Opening Stripe...",
             "payoutsContinue": "Continue setup",
             "payoutsStart": "Set up payouts",
+            "payoutsActive": "Payouts are set up. Buyers pay you through Stripe.",
+            "payoutsManage": "Manage payout account",
             "incompleteTitle": "Shipping details needed",
             "incompleteBody1": "Listings need your name, phone, and pickup address for the courier. Add them in your ",
             "incompleteLink": "account settings",

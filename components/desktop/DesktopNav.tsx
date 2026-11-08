@@ -498,6 +498,15 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                         <i className="fa-regular fa-eye mr-2.5 text-slate-500 w-4 text-center"></i>
                                         {t('desktop.navWatching')}
                                     </Link>
+                                    {/* Stripe payout account (the mobile Seller Dashboard's card). */}
+                                    <Link
+                                        href={`${pathPrefix}/settings?tab=payouts`}
+                                        onClick={() => setMenuOpen(false)}
+                                        className="block px-4 py-3 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                                    >
+                                        <i className="fa-solid fa-wallet mr-2.5 text-slate-500 w-4 text-center"></i>
+                                        {t('desktop.settings.sellerPayouts')}
+                                    </Link>
                                     {/* Certified breakers only — the feed itself carries no broadcaster entry points. */}
                                     {hasBeta('live_broadcast') && (
                                         <Link
@@ -629,6 +638,15 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 className="py-2.5 text-white hover:text-brand-cyan transition-colors"
                             >
                                 {t('desktop.navWatching')}
+                            </Link>
+                        )}
+                        {user && (
+                            <Link
+                                href={`${pathPrefix}/settings?tab=payouts`}
+                                onClick={() => setMobileNavOpen(false)}
+                                className="py-2.5 text-white hover:text-brand-cyan transition-colors"
+                            >
+                                {t('desktop.settings.sellerPayouts')}
                             </Link>
                         )}
                         {user && hasBeta('live_broadcast') && (

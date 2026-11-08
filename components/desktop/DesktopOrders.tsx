@@ -1062,6 +1062,13 @@ export default function DesktopOrders() {
                             />
                         ) : (
                             <div className="space-y-3">
+                                {/* "Where is my money?" is answered by Stripe, not
+                                    by this list: link the payout account here. */}
+                                <div className="flex justify-end">
+                                    <Link href="/settings?tab=payouts" className="text-xs font-bold text-slate-400 hover:text-brand-cyan transition-colors">
+                                        <i className="fa-solid fa-wallet mr-1.5"></i>{t('desktop.settings.sellerPayouts')}
+                                    </Link>
+                                </div>
                                 {/* One row per checkout — items stack, fee and net
                                     are summed across the group. */}
                                 {groupByTransferGroup(sales).map((group) => {

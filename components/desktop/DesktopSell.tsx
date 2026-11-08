@@ -332,6 +332,21 @@ export default function DesktopSell() {
                 />
             )}
 
+            {/* The banner is silent once payouts work, so without this row a
+                desktop seller had no sign a payout account existed, nor a way
+                to Stripe (mobile has the Seller Dashboard card). */}
+            {stripeStatus && sellerState === 'ready' && (
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/40 px-5 py-3">
+                    <p className="text-sm text-slate-300">
+                        <i className="fa-solid fa-circle-check mr-2 text-brand-green"></i>
+                        {t('desktop.sell.payoutsActive')}
+                    </p>
+                    <a href="/settings?tab=payouts" className="text-xs font-black text-brand-cyan hover:underline shrink-0">
+                        {t('desktop.sell.payoutsManage')}
+                    </a>
+                </div>
+            )}
+
             {/* Back from Stripe's hosted onboarding — the moment the seller has
                 just done something effortful and has no idea what remains.
                 Shown only on that return, not permanently. */}

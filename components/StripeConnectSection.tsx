@@ -59,8 +59,12 @@ async function detectNativePlatform(): Promise<boolean> {
 //     cardstreet.app are unreliable, so we never rely on them. The
 //     appUrlOpen handler in app/page.tsx turns that deep link into a
 //     'stripe-connect-return' event (listened for below).
-//   - Web: return to the current origin (localhost / preview / prod).
-function stripeReturnUrls(isNative: boolean): { returnUrl?: string; refreshUrl?: string } {
+//   - Web: return to the current origin (localhost / preview / prod) at
+//     `returnPath`, the page that hosts this card, so the mount effect below
+//     sees ?stripe_connect= on the way back. The default is the mobile SPA
+//     root; the desktop settings tab passes its own path, because the desktop
+//     homepage ignores the param and the seller would land with no feedback.
+function stripeReturnUrls(isNative: boolean, returnPath = '/'): { returnUrl?: string; refreshUrl?: string } {
     if (isNative) {
         return {
             returnUrl: 'https://cardstreet.app/mobile-redirect?stripe_connect=complete',
@@ -69,9 +73,10 @@ function stripeReturnUrls(isNative: boolean): { returnUrl?: string; refreshUrl?:
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     if (!origin) return {};
+    const sep = returnPath.includes('?') ? '&' : '?';
     return {
-        returnUrl: `${origin}/?stripe_connect=complete`,
-        refreshUrl: `${origin}/?stripe_connect=refresh`,
+        returnUrl: `${origin}${returnPath}${sep}stripe_connect=complete`,
+        refreshUrl: `${origin}${returnPath}${sep}stripe_connect=refresh`,
     };
 }
 
@@ -104,9 +109,14 @@ interface StripeConnectSectionProps {
      * enabled and last afterwards.
      */
     onStatusChange?: (status: ConnectStatus | null) => void;
+    /**
+     * Web only: the path Stripe sends the seller back to after a hosted flow
+     * (query string allowed). Defaults to the SPA root.
+     */
+    returnPath?: string;
 }
 
-export default function StripeConnectSection({ onStatusChange }: StripeConnectSectionProps = {}) {
+export default function StripeConnectSection({ onStatusChange, returnPath = '/' }: StripeConnectSectionProps = {}) {
     const { t } = useTranslation();
     const [status, setStatus] = useState<ConnectStatus | null>(null);
     // A ref so an inline callback never re-creates fetchStatus (its callers
@@ -147,7 +157,7 @@ export default function StripeConnectSection({ onStatusChange }: StripeConnectSe
         setError(null);
         try {
             const isNative = await detectNativePlatform();
-            const urls = stripeReturnUrls(isNative);
+            const urls = stripeReturnUrls(isNative, returnPath);
             const res = await fetch('/api/stripe/connect/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -164,7 +174,7 @@ export default function StripeConnectSection({ onStatusChange }: StripeConnectSe
             setError(e.message);
             setActionLoading(false);
         }
-    }, []);
+    }, [returnPath]);
 
     // On mount: check for Stripe redirect query params (web), then the
     // deep-link resume flag (native App Link taps stash it in sessionStorage
@@ -264,7 +274,7 @@ export default function StripeConnectSection({ onStatusChange }: StripeConnectSe
         setError(null);
         try {
             const isNative = await detectNativePlatform();
-            const urls = stripeReturnUrls(isNative);
+            const urls = stripeReturnUrls(isNative, returnPath);
             const res = await fetch('/api/stripe/connect/dashboard', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -281,7 +291,7 @@ export default function StripeConnectSection({ onStatusChange }: StripeConnectSe
             setError(e.message);
             setActionLoading(false);
         }
-    }, []);
+    }, [returnPath]);
 
     if (loading) {
         return (

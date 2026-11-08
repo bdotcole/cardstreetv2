@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
@@ -14,8 +15,13 @@ import AvatarFrame from '@/components/rewards/AvatarFrame';
 import { useRewardsSummary } from '@/lib/hooks/useRewardsSummary';
 import { FRAME_STYLES } from '@/lib/rewardTiers';
 import { isValidThaiPhone } from '@/lib/utils/phone';
+import StripeConnectSection from '@/components/StripeConnectSection';
 
-type Tab = 'profile' | 'preferences';
+type Tab = 'profile' | 'preferences' | 'payouts';
+
+// Where Stripe returns the seller after onboarding started from this page.
+// Lands back on the Payouts tab with ?stripe_connect= for the card to read.
+const PAYOUTS_TAB_PATH = '/settings?tab=payouts';
 
 interface ProfileForm {
     display_name: string;
@@ -82,7 +88,8 @@ export default function DesktopSettings() {
     const { showToast } = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const initialTab: Tab = searchParams?.get('tab') === 'preferences' ? 'preferences' : 'profile';
+    const urlTab = searchParams?.get('tab');
+    const initialTab: Tab = urlTab === 'preferences' || urlTab === 'payouts' ? urlTab : 'profile';
 
     const [tab, setTab] = useState<Tab>(initialTab);
     // Shared auth state from the cart provider (single gotrue subscription
@@ -276,7 +283,11 @@ export default function DesktopSettings() {
             </div>
 
             <div className="flex gap-2 mt-6 border-b border-white/5 pb-3">
-                {([['profile', t('desktop.editProfile')], ['preferences', t('desktop.settings.preferences')]] as [Tab, string][]).map(([id, label]) => (
+                {([
+                    ['profile', t('desktop.editProfile')],
+                    ['preferences', t('desktop.settings.preferences')],
+                    ['payouts', t('desktop.settings.sellerPayouts')],
+                ] as [Tab, string][]).map(([id, label]) => (
                     <button
                         key={id}
                         onClick={() => goTab(id)}
@@ -289,7 +300,25 @@ export default function DesktopSettings() {
                 ))}
             </div>
 
-            {loading ? (
+            {tab === 'payouts' ? (
+                // Desktop home of the Stripe card that the mobile Seller
+                // Dashboard carries. Independent of the profile load above: the
+                // card fetches its own status. Until this tab existed a desktop
+                // seller with payouts enabled had no way to reach Stripe at all
+                // (/sell only shows a banner while setup is unfinished).
+                <div className="mt-8 space-y-4 max-w-2xl">
+                    <StripeConnectSection returnPath={PAYOUTS_TAB_PATH} />
+                    <div className="bg-slate-800/40 border border-white/5 rounded-xl px-4 py-3">
+                        <p className="text-sm font-bold text-slate-300 mb-1">
+                            <i className="fa-solid fa-credit-card mr-2 text-slate-500"></i>{t('sellerInfo.stripeTitle')}
+                        </p>
+                        <p className="text-xs text-slate-400 leading-relaxed">{t('sellerInfo.stripeBody')}</p>
+                    </div>
+                    <Link href="/orders?tab=sales" className="inline-block text-sm text-slate-300 hover:text-brand-cyan transition-colors font-bold">
+                        <i className="fa-solid fa-coins mr-2 text-slate-500"></i>{t('desktop.orders.tabSales')}
+                    </Link>
+                </div>
+            ) : loading ? (
                 <div className="h-64 rounded-2xl bg-white/5 animate-pulse mt-8"></div>
             ) : tab === 'profile' ? (
                 <div className="mt-8 space-y-6">
@@ -498,7 +527,9 @@ function PreferencesTab({ prefs, togglePref }: { prefs: Prefs; togglePref: (k: k
 
             {/* Account links */}
             <section className="border-t border-white/5 pt-6 flex flex-wrap gap-4">
-                <a href="/sell" className="text-sm text-slate-300 hover:text-brand-cyan transition-colors font-bold">
+                {/* Used to send sellers to /sell, which says nothing about
+                    payouts once setup is done. */}
+                <a href={PAYOUTS_TAB_PATH} className="text-sm text-slate-300 hover:text-brand-cyan transition-colors font-bold">
                     <i className="fa-solid fa-wallet mr-2 text-slate-500"></i>{t('desktop.settings.sellerPayouts')}
                 </a>
                 <a href="/delete" className="text-sm text-slate-500 hover:text-brand-red transition-colors font-bold">
