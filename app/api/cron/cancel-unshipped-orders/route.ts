@@ -29,8 +29,10 @@ import { refundAndCancelOrders } from '@/lib/orderRefunds';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
-/** Orders placed before this were sold under the old rules; support closes them by hand. */
-export const AUTO_CANCEL_POLICY_START = '2026-11-09T00:00:00Z';
+// Orders placed before this were sold under the old rules; support closes
+// them by hand. (Not exported: a route file may only export its handlers and
+// Next's config fields, or `next build` fails.)
+const AUTO_CANCEL_POLICY_START = '2026-11-09T00:00:00Z';
 const TIME_BUDGET_MS = 90_000;
 const MAX_GROUPS_PER_RUN = 20;
 
