@@ -21,7 +21,7 @@
  * Exit 1 on any failure.
  */
 
-import { buildTable, cardAt, commitFor, draw, verifyDraw } from '../lib/slabPacks/engine';
+import { buildTable, cardAt, commitFor, draw, poolWithoutRepeats, verifyDraw } from '../lib/slabPacks/engine';
 import { poolForGame } from '../lib/slabPacks/pool';
 import { HIT_CLASSES, HIT_ORDER, LIVE_TIERS, PACK_GAMES, TARGET_EV, TIERS, TIER_ORDER, classify } from '../lib/slabPacks/tiers';
 import type { HitClass, PackTable } from '../lib/slabPacks/types';
@@ -156,6 +156,54 @@ function drawsFollowOdds(table: PackTable, seedPrefix: string, client: string) {
         refused = true;
     }
     check(refused, 'a pool with no floor cards still builds a table');
+}
+
+// No repeats (founder's rule, 2026-11-09): a buyer never pulls a card they
+// already pulled in the same order, nor the card they pulled last. The rule
+// gives way only when it would empty the floor and so refuse the sale.
+{
+    const tier = TIERS.bronze;
+    const pool = poolForGame('pokemon');
+    const isFloor = (valueThb: number) => classify(valueThb, tier.priceThb) === 'd';
+    const [a, b] = pool.map((s) => s.key);
+
+    check(poolWithoutRepeats(pool, tier, [], null) === pool, 'a buyer with no history does not draw from the whole pool');
+    const trimmed = poolWithoutRepeats(pool, tier, [a], b);
+    check(!trimmed.some((s) => s.key === a || s.key === b), 'a repeat is still in the draw pool');
+    check(trimmed.length === pool.length - 2, 'the no-repeat pool dropped more than the repeats');
+
+    // One floor card left, and it is the one just pulled: it stays in rather than pause the pack.
+    const oneFloor = [...pool.filter((s) => !isFloor(s.valueThb)), pool.find((s) => isFloor(s.valueThb))!];
+    const lone = oneFloor[oneFloor.length - 1];
+    const relaxed = poolWithoutRepeats(oneFloor, tier, [], lone.key);
+    check(relaxed.some((s) => s.key === lone.key), 'the only floor card was left out, which would pause the pack');
+    let builds = true;
+    try {
+        buildTable('pokemon', tier, relaxed);
+    } catch {
+        builds = false;
+    }
+    check(builds, 'the relaxed no-repeat pool does not build a table');
+
+    // Single packs, one after another, with every copy always back in stock:
+    // the worst case for repeats. Never the same card twice running.
+    let previous: string | null = null;
+    let backToBack = 0;
+    for (let i = 0; i < 4000; i++) {
+        const d = draw(buildTable('pokemon', tier, poolWithoutRepeats(pool, tier, [], previous)), `repeat-${i}`, 'client-1');
+        if (d.slabKey === previous) backToBack += 1;
+        previous = d.slabKey;
+    }
+    check(backToBack === 0, `${backToBack} back-to-back repeats in 4,000 single packs`);
+
+    // Ten packs in one order: ten different cards.
+    const order: string[] = [];
+    for (let i = 0; i < 10; i++) {
+        const before = order.length ? order[order.length - 1] : null;
+        order.push(draw(buildTable('pokemon', tier, poolWithoutRepeats(pool, tier, order, before)), `order-${i}`, 'client-1').slabKey);
+    }
+    check(new Set(order).size === order.length, 'a card came up twice inside one order');
+    console.log(`\nNo repeats: 0 back-to-back in 4,000 single Bronze packs, ${new Set(order).size} different cards in a 10-pack order`);
 }
 
 console.log(failures ? `\n${failures} failure(s)` : '\nall checks passed');

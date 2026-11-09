@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { MotionGlobalConfig, animate, motion, useMotionValue, useTransform, type MotionValue } from 'framer-motion';
 import { Activity, ChevronLeft, ChevronRight, Coins, CreditCard, Minus, Package, Plus, Vault, Wallet } from 'lucide-react';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { preloadArt } from '@/lib/slabPacks/art';
 import { readDebug, type SlabPacksDebug } from '@/lib/slabPacks/debug';
 import { topPulls } from '@/lib/slabPacks/engine';
 import { haptics } from '@/lib/slabPacks/haptics';
@@ -109,6 +110,17 @@ export default function SlabPacksApp() {
     const table = tryTable(game, tierKey);
     const chase = useMemo(() => (table ? topPulls(table, 8) : []), [table]);
 
+    // A top pull opens as a full-size slab when tapped. Its large art is
+    // fetched a beat after the strip settles, so the sheet opens on the card
+    // rather than on an empty case.
+    useEffect(() => {
+        if (!chase.length) return;
+        const id = setTimeout(() => {
+            for (const c of chase) void preloadArt(c.slab, 'large');
+        }, 600);
+        return () => clearTimeout(id);
+    }, [chase]);
+
     // A method the balance cannot cover falls back to the card, which never
     // runs out: the pack is paid for at purchase, like any order.
     const total = qty * tier.priceThb;
@@ -199,6 +211,7 @@ export default function SlabPacksApp() {
     return (
         <div
             className={`sp-root theme-dark-locked ${isThai ? 'sp-th' : ''}`}
+            data-stage={session ? 'true' : undefined}
             style={tierVars(tier)}
             onPointerDown={() => sfx.unlock()}
         >
@@ -217,6 +230,12 @@ export default function SlabPacksApp() {
                     </div>
                 ) : (
                     <>
+                        {/* Nothing under an open stage is painted. The stage is opaque, but a
+                            phone that drops a frame of it mid-rip showed the pack carousel
+                            through the gap; hidden, there is nothing to show, and the lobby's
+                            layers are not held in GPU memory while the opening runs. The
+                            screens stay mounted, so the lobby comes back exactly as it was. */}
+                        <div className="contents" style={session ? { visibility: 'hidden' } : undefined}>
                         {tab === 'packs' && (
                             <Lobby
                                 game={game}
@@ -291,6 +310,7 @@ export default function SlabPacksApp() {
                                 setTab(next);
                             }}
                         />
+                        </div>
 
                         {session && (
                             <OpeningStage

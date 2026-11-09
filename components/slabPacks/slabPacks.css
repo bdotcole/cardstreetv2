@@ -652,6 +652,9 @@
   height: 100%;
   object-fit: cover;
   -webkit-user-drag: none;
+  /* An image that is still loading paints nothing, not its alt text. */
+  color: transparent;
+  font-size: 0;
 }
 
 /* Foil flash on the card itself, driven by the same tilt variables. */
@@ -766,6 +769,18 @@
   z-index: 60;
   background: #030407;
   overflow: hidden;
+}
+
+/* While a pack is being opened nothing beneath the stage is painted. The
+   screens are hidden in the markup (SlabPacksApp); on a phone, where the
+   stage covers the whole root, the ambient light goes too. A phone that
+   drops a frame of the stage mid-rip then shows flat black instead of the
+   pack carousel, and the GPU is not holding the lobby's layers at the
+   moment the opening needs the memory. */
+@media (max-width: 480px) {
+  .sp-root[data-stage='true'] .sp-ambient {
+    visibility: hidden;
+  }
 }
 
 /* House lights: a cone from above, a pool on the floor, dust in the beam. */
@@ -893,6 +908,12 @@
 
 .sp-bump {
   animation: sp-bump 0.36s cubic-bezier(0.2, 1.4, 0.3, 1);
+}
+
+/* The same bump under a second name: swapping between the two restarts the
+   animation on every step without remounting the slab inside it. */
+.sp-bump-alt {
+  animation: sp-bump-alt 0.36s cubic-bezier(0.2, 1.4, 0.3, 1);
 }
 
 .sp-float {
@@ -1114,6 +1135,12 @@
 }
 
 @keyframes sp-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+@keyframes sp-bump-alt {
   0% { transform: scale(1); }
   40% { transform: scale(1.07); }
   100% { transform: scale(1); }

@@ -256,6 +256,36 @@ export function buildTable(game: GameKey, tier: PackTier, pool: readonly Slab[])
     return best!;
 }
 
+/**
+ * The pool one pack is drawn from, with the buyer's own repeats left out:
+ * nothing they have already pulled in this order, and not the card they
+ * pulled immediately before (the founder's rule of 2026-11-09: the same card
+ * twice running is no fun). Stock can hold several copies of a card, and a
+ * sold-back card returns to it, so without this a repeat is a real outcome.
+ *
+ * `inOrder` is what this order has drawn so far, in draw order; `previous`
+ * is the card pulled just before this pack (the last of the buyer's earlier
+ * order for a first pack). A repeat is let back in only when leaving it out
+ * would empty the tier's floor class, since that would refuse the sale
+ * outright: the in-order rule gives way first, then the back-to-back one.
+ */
+export function poolWithoutRepeats(
+    pool: readonly Slab[],
+    tier: PackTier,
+    inOrder: readonly string[],
+    previous: string | null,
+): readonly Slab[] {
+    if (!inOrder.length && !previous) return pool;
+    const floor = floorClass(tier);
+    const hasFloor = (p: readonly Slab[]) => p.some((s) => classify(s.valueThb, tier.priceThb) === floor);
+    const seen = new Set(inOrder);
+    if (previous) seen.add(previous);
+    const strict = pool.filter((s) => !seen.has(s.key));
+    if (hasFloor(strict)) return strict;
+    const backToBack = previous ? pool.filter((s) => s.key !== previous) : pool;
+    return hasFloor(backToBack) ? backToBack : pool;
+}
+
 /** The dearest cards of a table, best first: the lobby's top-pulls strip. */
 export function topPulls(table: PackTable, limit: number): CardOdds[] {
     return table.cards.slice(0, limit);

@@ -29,7 +29,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import { buildTable, commitFor, draw } from './engine';
+import { buildTable, commitFor, draw, poolWithoutRepeats } from './engine';
 import {
     CASHOUT_BUSINESS_DAYS, CASHOUT_HOLD_DAYS, CASHOUT_MIN_THB, CASHOUT_MONTHLY_CAP_THB, CASHOUT_REQUIRES,
     COINS_EARNED_PER_THB, DAY_MS, NO_VERIFICATION, SHIP_FEE_THB,
@@ -430,6 +430,18 @@ export function shippingQuote(pull: Pull, insure: boolean): { feeThb: number; in
     return { feeThb: SHIP_FEE_THB, insuranceThb: ins, totalThb: SHIP_FEE_THB + ins };
 }
 
+/**
+ * The card the buyer pulled most recently: the last pack of their newest
+ * order. Pulls are kept newest order first, each order in the sequence it
+ * was drawn, and an order's pulls share one timestamp.
+ */
+function lastPulledKey(pulls: readonly Pull[]): string | null {
+    if (!pulls.length) return null;
+    let k = 0;
+    while (k + 1 < pulls.length && pulls[k + 1].at === pulls[0].at) k += 1;
+    return pulls[k].slabKey;
+}
+
 export type BuyResult =
     | { ok: true; pulls: Pull[] }
     | { ok: false; reason: 'loading' | 'wallet' | 'coins' | 'unavailable' };
@@ -447,11 +459,12 @@ export const previewActions = {
      * pulls come back unrevealed and are already owned — closing the app
      * mid-reveal loses nothing. A card payment is simulated as instant.
      *
-     * Packs are drawn one at a time from the stock that is left, so a
-     * one-copy card cannot be pulled twice in the same order; each pull
-     * records the fingerprint of the stock its table was built from. If the
-     * floor runs dry mid-order, the buyer gets (and pays for) the packs that
-     * could be drawn.
+     * Packs are drawn one at a time from the stock that is left, with the
+     * buyer's own repeats left out (nothing already pulled in this order,
+     * and not the card they pulled last: engine.ts poolWithoutRepeats). Each
+     * pull records the fingerprint of the pool its table was built from. If
+     * the floor runs dry mid-order, the buyer gets (and pays for) the packs
+     * that could be drawn.
      */
     buy(game: GameKey, tierKey: TierKey, count: number, method: PaymentMethod): BuyResult {
         const s = state;
@@ -464,8 +477,10 @@ export const previewActions = {
         const stock = { ...s.stock };
         const snapshots = { ...s.stockSnapshots };
         const pulls: Pull[] = [];
+        const drawn: string[] = [];
+        let previous = lastPulledKey(s.pulls);
         for (let i = 0; i < asked; i++) {
-            const pool = stockPool(game, stock);
+            const pool = poolWithoutRepeats(stockPool(game, stock), tier, drawn, previous);
             const table = tableFor(game, tierKey, pool);
             if (!table) break;
             const hash = poolFingerprint(pool);
@@ -477,6 +492,8 @@ export const previewActions = {
             const seed = newSeed();
             const d = draw(table, seed, s.clientSeed);
             stock[d.slabKey] = Math.max(0, (stock[d.slabKey] ?? 0) - 1);
+            drawn.push(d.slabKey);
+            previous = d.slabKey;
             pulls.push({
                 id: `${game}-${tierKey}-${now}-${i}`,
                 slabKey: d.slabKey, tier: tierKey, cls: d.cls,

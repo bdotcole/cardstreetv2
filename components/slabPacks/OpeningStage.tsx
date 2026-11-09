@@ -3,8 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Coins, FastForward, Volume2, VolumeX, X } from 'lucide-react';
+import { isArtReady, preloadArt } from '@/lib/slabPacks/art';
 import { haptics } from '@/lib/slabPacks/haptics';
-import { getSlab, gradeLabel, slabImage } from '@/lib/slabPacks/pool';
+import { getSlab, gradeLabel } from '@/lib/slabPacks/pool';
 import { previewActions } from '@/lib/slabPacks/previewStore';
 import { sfx, type ChargeHandle, type TearHandle } from '@/lib/slabPacks/sfx';
 import type { PaymentMethod } from '@/lib/slabPacks/previewStore';
@@ -56,6 +57,9 @@ type Phase = 'present' | 'ready' | 'tearing' | 'burst' | 'rise' | 'charge' | 'fl
 const STEP_MS = 430;
 const CHARGE_LEAD_MS = 520;
 const CHARGE_TAIL_MS = 300;
+// How long the tell may hold for card art that has not arrived, and how often it looks.
+const ART_WAIT_MS = 2500;
+const ART_POLL_MS = 80;
 const RAINBOW = ['#ff5fa2', '#ffd166', '#7dffcb', '#7dd3fc', '#c084fc', '#ffffff'];
 // Share of the pack's width the cut must cover before it gives.
 const TEAR_SPAN = 0.8;
@@ -206,13 +210,30 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
         [clearTimers, impact, later, pulls, quick],
     );
 
+    // The art is fetched and decoded when the pack is bought, but a slow
+    // connection can still be behind the tell. Turning over an empty case is
+    // the one thing the reveal must not do, so the slab stays face-down (and
+    // keeps trembling) until its card can be painted, for a bounded time.
+    const flipWhenReady = useCallback(
+        (idx: number) => {
+            const s = getSlab(pulls[idx].slabKey);
+            const started = performance.now();
+            const attempt = () => {
+                if (!s || isArtReady(s, 'large') || performance.now() - started >= ART_WAIT_MS) flip(idx);
+                else later(ART_POLL_MS, attempt);
+            };
+            attempt();
+        },
+        [flip, later, pulls],
+    );
+
     const beginCharge = useCallback(
         (idx: number) => {
             const r = HIT_CLASSES[pulls[idx].cls].rank;
             setPhase('charge');
             setStep(0);
             if (quick) {
-                later(140, () => flip(idx));
+                later(140, () => flipWhenReady(idx));
                 return;
             }
             const total = CHARGE_LEAD_MS + r * STEP_MS + CHARGE_TAIL_MS;
@@ -230,9 +251,9 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                     });
                 });
             }
-            later(total, () => flip(idx));
+            later(total, () => flipWhenReady(idx));
         },
-        [flip, later, pointOf, pulls, quick],
+        [flipWhenReady, later, pointOf, pulls, quick],
     );
 
     const completeTear = useCallback(() => {
@@ -265,7 +286,10 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
     useEffect(() => {
         for (const p of pulls) {
             const s = getSlab(p.slabKey);
-            if (s) new Image().src = slabImage(s, 'large');
+            if (!s) continue;
+            // Small first: it lands in a moment and stands in until the large one is decoded.
+            void preloadArt(s, 'small');
+            void preloadArt(s, 'large');
         }
         if (session.packless) {
             sfx.rise();
@@ -492,7 +516,7 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
     };
 
     const skipCharge = () => {
-        if (phase === 'charge') flip(i);
+        if (phase === 'charge') flipWhenReady(i);
     };
 
     // ── Derived visuals ─────────────────────────────────────────────────────
@@ -685,7 +709,10 @@ export default function OpeningStage({ session, credits, fast, reduced, sound, o
                                 className={phase === 'charge' && !quick ? 'sp-tremble' : phase === 'revealed' ? 'sp-float' : ''}
                                 style={{ '--step': step, '--aura': backAura } as React.CSSProperties}
                             >
-                                <div key={`bump-${step}`} className={phase === 'charge' && step > 0 ? 'sp-bump' : ''}>
+                                {/* The bump restarts on each step by swapping between two identical
+                                    animations. Re-keying this wrapper remounted the slab, and with it
+                                    the card image, at every step and again at the flip. */}
+                                <div className={phase === 'charge' && step > 0 ? (step % 2 ? 'sp-bump' : 'sp-bump-alt') : ''}>
                                     <SlabCard
                                         slab={slab}
                                         tier={tier}

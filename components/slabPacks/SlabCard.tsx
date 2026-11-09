@@ -91,7 +91,14 @@ export default function SlabCard({
                             )}
                             <div className="sp-slab-window">
                                 <div className="sp-slab-card">
-                                    {/* Card art is served straight from our own bucket (see lib/imageUtils). */}
+                                    {/* Card art is served straight from our own bucket (see lib/imageUtils).
+                                        Under the hero art sits the small image: a grid has usually
+                                        cached it already, and it arrives first when not, so the case
+                                        is never empty while the large one loads. */}
+                                    {art === 'large' && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={slabImage(slab, 'small')} alt="" aria-hidden draggable={false} />
+                                    )}
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={slabImage(slab, art)} alt={slab.name} draggable={false} decoding="async" />
                                     <div className="sp-slab-foil" style={{ '--sp-foil': foil } as React.CSSProperties} />
