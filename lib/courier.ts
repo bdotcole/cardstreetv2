@@ -2,6 +2,7 @@ import CourierClient from "@trycourier/courier";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_LABELS } from "./breakerApplication";
 import { unsubscribeUrl } from "./unsubscribeToken";
+import { AUTO_CANCEL_AFTER_DAYS, BUYER_CANCEL_AFTER_DAYS } from "./orderDisputes";
 import { customerSupportEmail, founderAlertEmail, supportInboxEmail } from "./supportAddresses";
 
 // Lazy-initialized Courier client. We can't construct at module load because
@@ -3596,11 +3597,11 @@ export async function sendOrderCancelledSellerNotification(sellerId: string, d: 
     const amount = `฿${Math.round(d.amountThb).toLocaleString()}`;
     const what = d.itemName ? ` (${d.itemName}${(d.itemCount ?? 1) > 1 ? ` +${(d.itemCount ?? 1) - 1}` : ''})` : '';
     const whyTh = d.reason === 'auto_unshipped'
-        ? 'เพราะไม่ได้จัดส่งภายใน 5 วันหลังผู้ซื้อชำระเงิน'
-        : d.reason === 'buyer_cancel' ? 'ผู้ซื้อขอยกเลิกเพราะยังไม่ได้จัดส่งหลังผ่านไป 4 วัน' : 'โดยทีมงาน Cardstreet';
+        ? `เพราะไม่ได้จัดส่งภายใน ${AUTO_CANCEL_AFTER_DAYS} วันหลังผู้ซื้อชำระเงิน`
+        : d.reason === 'buyer_cancel' ? `ผู้ซื้อขอยกเลิกเพราะยังไม่ได้จัดส่งหลังผ่านไป ${BUYER_CANCEL_AFTER_DAYS} วัน` : 'โดยทีมงาน Cardstreet';
     const whyEn = d.reason === 'auto_unshipped'
-        ? 'because it was not shipped within 5 days of payment'
-        : d.reason === 'buyer_cancel' ? 'because the buyer cancelled after 4 days without a shipment' : 'by the Cardstreet team';
+        ? `because it was not shipped within ${AUTO_CANCEL_AFTER_DAYS} days of payment`
+        : d.reason === 'buyer_cancel' ? `because the buyer cancelled after ${BUYER_CANCEL_AFTER_DAYS} days without a shipment` : 'by the Cardstreet team';
     const title = `คำสั่งซื้อ #${shortId} ถูกยกเลิก · Order #${shortId} cancelled`;
     try {
         await courier.send.message({

@@ -734,7 +734,7 @@ export default function DesktopOrders() {
                                                             {t('orderActions.receivedEarly')}
                                                         </button>
                                                     )}
-                                                    {/* Seller has not shipped: from day four the buyer may ask
+                                                    {/* Seller has not shipped: from day seven the buyer may ask
                                                         to cancel (a support ticket; the team refunds). */}
                                                     {!order.break_spot_id && group.every((o) => isUnshippedOrder(o, o.shipping_labels?.[0])) && (
                                                         group.every((o) => canBuyerCancelUnshipped(o, o.shipping_labels?.[0])) ? (

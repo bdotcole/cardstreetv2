@@ -84,8 +84,11 @@ export function shipByDate(createdAt: string | null | undefined): Date | null {
  * signal auto-completes AUTO_COMPLETE_AFTER_DAYS after it was marked shipped
  * (reconcile-shipments), unless the buyer reported it first.
  */
-export const BUYER_CANCEL_AFTER_DAYS = 4;
-export const AUTO_CANCEL_AFTER_DAYS = 5;
+// Seven, not four (founder, 2026-11-12): four days asked for a refund while
+// slow but honest sellers were still getting to a branch. The automatic
+// cancel stays one day behind the request, as it was.
+export const BUYER_CANCEL_AFTER_DAYS = 7;
+export const AUTO_CANCEL_AFTER_DAYS = 8;
 export const AUTO_COMPLETE_AFTER_DAYS = 14;
 
 /** Order statuses in which nothing has left the seller yet. */

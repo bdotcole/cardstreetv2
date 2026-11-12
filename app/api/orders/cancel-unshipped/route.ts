@@ -24,7 +24,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { embedArray } from '@/lib/utils/embed';
-import { canBuyerCancelUnshipped, isUnshippedOrder, buyerCancelDate } from '@/lib/orderDisputes';
+import { BUYER_CANCEL_AFTER_DAYS, canBuyerCancelUnshipped, isUnshippedOrder, buyerCancelDate } from '@/lib/orderDisputes';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { notifySupportInbox } from '@/lib/supportEmail';
 
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     if (!orders.every((o) => canBuyerCancelUnshipped(o, labelOf(o)))) {
         const availableAt = orders.map((o) => buyerCancelDate(o.created_at)?.getTime() ?? 0).reduce((a, b) => Math.max(a, b), 0);
         return NextResponse.json(
-            { error: 'You can ask to cancel once the seller has had four days to ship', code: 'TOO_EARLY', availableAt: availableAt ? new Date(availableAt).toISOString() : null },
+            { error: `You can ask to cancel once the seller has had ${BUYER_CANCEL_AFTER_DAYS} days to ship`, code: 'TOO_EARLY', availableAt: availableAt ? new Date(availableAt).toISOString() : null },
             { status: 409 },
         );
     }

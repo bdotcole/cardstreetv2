@@ -2,7 +2,7 @@
  * Auto-cancel + refund for orders a seller never shipped.
  *
  * The ship-reminders cron has nagged the seller at 24/48/72h and paged the
- * inbox at 72h; the buyer could cancel from day 4. At AUTO_CANCEL_AFTER_DAYS
+ * inbox at 72h; the buyer could ask to cancel from BUYER_CANCEL_AFTER_DAYS. At AUTO_CANCEL_AFTER_DAYS
  * (lib/orderDisputes) this cron refunds the checkout itself through
  * lib/orderRefunds, so no buyer waits weeks for a card that is not coming
  * (orders 19c2ec52, 55d18025, 4c3cd9d9 in 2026-10/11 all did).

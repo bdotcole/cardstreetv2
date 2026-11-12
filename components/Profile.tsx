@@ -2204,7 +2204,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                           {t('orderActions.receivedEarly')}
                         </button>
                       )}
-                      {/* Seller has not shipped: from day four the buyer may ask to
+                      {/* Seller has not shipped: from day seven the buyer may ask to
                           cancel (a support ticket; the team refunds). Before that, say
                           when they can. */}
                       {!order.break_spot_id && group.every((o) => isUnshippedOrder(o, o.shipping_labels?.[0])) && (
