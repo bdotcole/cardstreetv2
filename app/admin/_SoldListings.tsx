@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import type { SoldListingRow, SoldListingsPage } from '@/lib/adminSales.server'
+import { OrderDrawer } from './_OrderDrawer'
 
 // Order fulfillment stages: yellow = awaiting shipment, cyan = moving, green = done,
 // red = the buyer reported a problem.
@@ -35,6 +36,8 @@ export default function SoldListings({ initial }: { initial: SoldListingsPage | 
     const [error, setError] = useState<{ message: string; page: number } | null>('error' in initial ? { message: initial.error, page: 1 } : null)
     // A slow page must not overwrite a newer one when the pager is clicked fast.
     const latestRequest = useRef(0)
+    // The sale opened over the dashboard: order details, both parties, message boxes.
+    const [openOrder, setOpenOrder] = useState<string | null>(null)
 
     const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -73,7 +76,7 @@ export default function SoldListings({ initial }: { initial: SoldListingsPage | 
         <div className="glass rounded-2xl border border-white/10 overflow-hidden">
             <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between gap-3">
                 <h2 className="font-black text-white text-sm uppercase tracking-wide italic">Sold Listings</h2>
-                {total > 0 && <p className="text-[10px] text-slate-500 font-bold uppercase">{total.toLocaleString('en-US')} sales</p>}
+                {total > 0 && <p className="text-[10px] text-slate-500 font-bold uppercase">{total.toLocaleString('en-US')} sales · click one for details</p>}
             </div>
             {rows.length === 0 ? (
                 !error && <p className="px-6 py-8 text-center text-slate-500 text-sm">No sales yet</p>
@@ -87,12 +90,21 @@ export default function SoldListings({ initial }: { initial: SoldListingsPage | 
                                 <th className="px-4 py-3">Buyer</th>
                                 <th className="px-4 py-3 text-right">Sold Price</th>
                                 <th className="px-4 py-3">Order Stage</th>
-                                <th className="px-6 py-3 text-right">Date</th>
+                                <th className="px-4 py-3 text-right">Date</th>
+                                <th className="pl-0 pr-4 py-3" aria-hidden="true" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {rows.map((o) => (
-                                <tr key={o.id} className="hover:bg-white/5 transition-colors">
+                                <tr
+                                    key={o.id}
+                                    onClick={() => setOpenOrder(o.id)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenOrder(o.id) } }}
+                                    tabIndex={0}
+                                    role="button"
+                                    aria-label={`Open the order for ${o.cardName ?? 'this card'}`}
+                                    className={`cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 outline-none transition-colors ${openOrder === o.id ? 'bg-brand-cyan/5' : ''}`}
+                                >
                                     <td className="px-6 py-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             {o.image && (
@@ -113,9 +125,10 @@ export default function SoldListings({ initial }: { initial: SoldListingsPage | 
                                             {o.status.replace(/_/g, ' ')}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-3 text-[11px] text-slate-500 text-right whitespace-nowrap" title={dateTimeFmt.format(new Date(o.createdAt))}>
+                                    <td className="px-4 py-3 text-[11px] text-slate-500 text-right whitespace-nowrap" title={dateTimeFmt.format(new Date(o.createdAt))}>
                                         {dateFmt.format(new Date(o.createdAt))}
                                     </td>
+                                    <td className="pl-0 pr-4 py-3 text-right text-slate-600"><i className="fa-solid fa-chevron-right text-[10px]" /></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -137,6 +150,7 @@ export default function SoldListings({ initial }: { initial: SoldListingsPage | 
                     </div>
                 </div>
             )}
+            {openOrder && <OrderDrawer orderId={openOrder} onClose={() => setOpenOrder(null)} />}
         </div>
     )
 }

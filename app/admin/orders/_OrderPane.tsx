@@ -6,10 +6,13 @@ import {
     type AdminContact, type AdminOrderDetail,
 } from '@/lib/adminOrders'
 import { Spinner, StatusChip, initials } from '../inbox/_parts'
+import { SupportMessageBox } from '../_SupportMessageBox'
 
 // One order for the support team: what was bought, where the parcel is, who
 // the buyer and seller are and how to reach them, and every ticket or chat
-// already open with either of them. One write: Cancel and refund
+// already open with either of them. Each person card has a message box that
+// writes to them from the support shop without leaving the order. The other
+// write: Cancel and refund
 // (/api/admin/orders/[id]/refund -> lib/orderRefunds), which used to be a
 // Stripe dashboard refund plus hand-written SQL every time. Everything else
 // stays where it was (problem reports close on their ticket in the inbox,
@@ -103,6 +106,12 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
     const trackingNumber = parcel?.handoffTrackingNumber || waybill
     const trackingUrl = parcel?.handoffTrackingNumber ? null : parcel?.trackingUrl ?? (waybill ? flashTrackingUrl(waybill) : null)
 
+    const neverPaid = !order.payment.paid
+    const firstItem = order.items.find(i => i.orderId === order.id) ?? order.items[0]
+    // Opens every message sent from this page, so the person knows which order
+    // the support shop is writing about.
+    const messagePrefix = `Order #${order.shortId}${firstItem?.name ? ` (${firstItem.name}${order.items.length > 1 ? ` +${order.items.length - 1}` : ''})` : ''}: `
+
     const summary = [
         `Order #${order.shortId} (${order.id})`,
         `Status: ${statusLabel(order.status)}${order.flags.length ? ` · ${order.flags.map(f => f.label).join(', ')}` : ''}`,
@@ -172,15 +181,29 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
                     ))}
                 </div>
 
+                {neverPaid && order.status === 'cancelled' && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 space-y-0.5">
+                        <p className="text-xs font-bold text-amber-200"><i className="fa-solid fa-hourglass-end mr-1.5" />Never paid: the checkout timed out</p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                            The buyer started {order.payment.method === 'promptpay' ? 'a PromptPay' : 'this'} checkout and the payment never arrived, so it was cancelled automatically{order.updatedAt ? ` on ${fmt(order.updatedAt)}` : ''} and the {order.items.length > 1 ? 'cards went' : 'card went'} back on sale. No money moved and nobody cancelled it by hand; there is nothing to refund.
+                        </p>
+                    </div>
+                )}
+                {!neverPaid && order.status === 'cancelled' && !order.refund && (
+                    <p className="text-[11px] text-slate-400">
+                        <i className="fa-solid fa-circle-info mr-1.5 text-slate-500" />Paid, then cancelled{order.updatedAt ? ` on ${fmt(order.updatedAt)}` : ''}{order.cancelReason ? `: ${order.cancelReason}` : ''}. No refund is recorded here; check the payment in Stripe.
+                    </p>
+                )}
+
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 text-[11px]">
-                    <Stat label="Buyer paid" value={baht(order.amounts.total)} />
+                    <Stat label={neverPaid ? 'Checkout total (unpaid)' : 'Buyer paid'} value={baht(order.amounts.total)} />
                     <Stat label="Shipping inside" value={baht(order.amounts.shipping)} />
                     <Stat label="Cardstreet fee" value={baht(order.amounts.platformFee)} />
-                    <Stat label="Seller gets" value={baht(order.amounts.total - order.amounts.platformFee - order.amounts.discount)} hint="before Stripe's fee" />
+                    <Stat label={neverPaid ? 'Seller would get' : 'Seller gets'} value={baht(order.amounts.total - order.amounts.platformFee - order.amounts.discount)} hint="before Stripe's fee" />
                 </div>
                 {(order.payment.intentId || order.payment.method) && (
                     <p className="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
-                        {order.payment.method && <span>Paid by {order.payment.method}</span>}
+                        {order.payment.method && <span>{neverPaid ? `Chose ${order.payment.method}, did not pay` : `Paid by ${order.payment.method}`}</span>}
                         {order.payment.intentId && <CopyLine label="Stripe" value={order.payment.intentId} mono />}
                     </p>
                 )}
@@ -268,8 +291,8 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
 
             {/* People */}
             <div className="grid xl:grid-cols-2 gap-3">
-                <PersonCard role="Buyer" contact={order.buyerContact} fallbackName={personName(order.buyer)} addressLabel="Ships to" onShowAccount={onShowAccount} />
-                <PersonCard role="Seller" contact={order.sellerContact} fallbackName={personName(order.seller)} addressLabel="Pickup address" onShowAccount={onShowAccount} />
+                <PersonCard role="Buyer" contact={order.buyerContact} fallbackName={personName(order.buyer)} addressLabel="Ships to" onShowAccount={onShowAccount} messagePrefix={messagePrefix} onMessageSent={load} />
+                <PersonCard role="Seller" contact={order.sellerContact} fallbackName={personName(order.seller)} addressLabel="Pickup address" onShowAccount={onShowAccount} messagePrefix={messagePrefix} onMessageSent={load} />
             </div>
 
             {/* Parcel + timeline */}
@@ -313,7 +336,8 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
                 <div className="glass rounded-2xl border border-white/10 p-4 space-y-2">
                     <p className="text-[10px] font-bold uppercase text-slate-500">Timeline</p>
                     <div className="space-y-1 text-sm">
-                        <Row k="Paid" v={fmt(order.times.created)} />
+                        <Row k={neverPaid ? 'Checkout started' : 'Paid'} v={fmt(order.times.created)} />
+                        {order.status === 'cancelled' && <Row k={neverPaid ? 'Timed out' : 'Cancelled'} v={fmt(order.refund?.at ?? order.updatedAt)} />}
                         <Row k="Label created" v={fmt(order.times.labelCreated)} />
                         <Row k="Handed off" v={fmt(order.times.handedOff)} />
                         <Row k="Delivered" v={fmt(order.times.delivered)} />
@@ -383,13 +407,16 @@ function contactLine(c: AdminContact | null): string {
     return bits.join(' · ')
 }
 
-function PersonCard({ role, contact, fallbackName, addressLabel, onShowAccount }: {
+function PersonCard({ role, contact, fallbackName, addressLabel, onShowAccount, messagePrefix, onMessageSent }: {
     role: string
     contact: AdminContact | null
     fallbackName: string
     addressLabel: string
     onShowAccount?: (userId: string) => void
+    messagePrefix: string
+    onMessageSent: () => void
 }) {
+    const [composing, setComposing] = useState(false)
     const name = contact?.display_name?.trim() || contact?.username || fallbackName
     const banned = !!contact?.bannedAt
     const chatBanned = contact?.chatBannedUntil ? Date.parse(contact.chatBannedUntil) > Date.now() || contact.chatBannedUntil === 'infinity' : false
@@ -446,14 +473,13 @@ function PersonCard({ role, contact, fallbackName, addressLabel, onShowAccount }
                             <i className="fa-regular fa-id-card" />Account
                         </button>
                     )}
-                    <a
-                        href={`/admin/inbox?dm=${contact.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    <button
+                        onClick={() => setComposing(v => !v)}
+                        aria-expanded={composing}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-cyan/15 border border-brand-cyan/30 text-brand-cyan text-xs font-bold hover:bg-brand-cyan/25 transition"
                     >
-                        <i className="fa-regular fa-comment" />Message in support chat
-                    </a>
+                        <i className="fa-regular fa-comment" />Message {role.toLowerCase()}
+                    </button>
                     {contact.username && (
                         <a href={`/seller/${contact.username}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-xs font-bold hover:bg-white/10 transition">
                             <i className="fa-solid fa-store" />Shop page
@@ -463,6 +489,15 @@ function PersonCard({ role, contact, fallbackName, addressLabel, onShowAccount }
                         <i className="fa-solid fa-list" />All their orders
                     </a>
                 </div>
+            )}
+            {contact && composing && (
+                <SupportMessageBox
+                    toUserId={contact.id}
+                    toName={name}
+                    prefix={messagePrefix}
+                    onSent={onMessageSent}
+                    onClose={() => setComposing(false)}
+                />
             )}
         </div>
     )

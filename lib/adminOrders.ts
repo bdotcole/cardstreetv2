@@ -106,7 +106,13 @@ export interface AdminOrderThread {
 export interface AdminOrderDetail extends AdminOrderListItem {
     items: AdminOrderItem[]
     amounts: { total: number; shipping: number; platformFee: number; discount: number }
-    payment: { intentId: string | null; method: string | null; region: string | null }
+    /**
+     * `paid` is false for a checkout whose payment never landed (payment_id
+     * was never stamped): those rows are cancelled by the reconcile cron, not
+     * by a person, and no money moved.
+     */
+    payment: { intentId: string | null; method: string | null; region: string | null; paid: boolean }
+    cancelReason: string | null
     times: {
         created: string
         labelCreated: string | null

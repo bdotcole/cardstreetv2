@@ -106,7 +106,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
             platformFee: rows.reduce((s, r) => s + num(r.platform_fee), 0),
             discount: rows.reduce((s, r) => s + num(r.discount_amount), 0),
         },
-        payment: { intentId: row.stripe_payment_intent_id ?? null, method: row.payment_method, region: row.stripe_region ?? null },
+        payment: {
+            intentId: row.stripe_payment_intent_id ?? null,
+            method: row.payment_method,
+            region: row.stripe_region ?? null,
+            // An order past pending_payment was paid even if the id write was lost.
+            paid: !!row.payment_id || !['cancelled', 'pending', 'pending_payment'].includes(row.status),
+        },
+        cancelReason: row.cancel_reason ?? null,
         times: {
             created: row.created_at,
             labelCreated: label?.created_at ?? null,

@@ -60,6 +60,8 @@ export interface OrderRow {
     discount_amount?: number | string | null
     payment_method: string | null
     stripe_payment_intent_id?: string | null
+    payment_id?: string | null
+    cancel_reason?: string | null
     stripe_region?: string | null
     transfer_group: string | null
     break_spot_id?: string | null
