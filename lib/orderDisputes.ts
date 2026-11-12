@@ -77,8 +77,8 @@ export function shipByDate(createdAt: string | null | undefined): Date | null {
 /**
  * Seller non-performance ladder (the seller-ships-we-track model, 2026-11).
  * Reminders go out at 24/48/72h (app/api/cron/ship-reminders). From
- * BUYER_CANCEL_AFTER_DAYS the buyer may cancel for an automatic refund
- * (/api/orders/cancel-unshipped); at AUTO_CANCEL_AFTER_DAYS the
+ * BUYER_CANCEL_AFTER_DAYS the buyer may ask to cancel (a support ticket via
+ * /api/orders/cancel-unshipped; the team refunds from the admin order page); at AUTO_CANCEL_AFTER_DAYS the
  * cancel-unshipped-orders cron refunds on its own. Both run through
  * lib/orderRefunds. A parcel the seller shipped themselves with no tracking
  * signal auto-completes AUTO_COMPLETE_AFTER_DAYS after it was marked shipped

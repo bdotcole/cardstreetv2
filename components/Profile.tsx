@@ -1027,8 +1027,8 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
     }
   };
 
-  // Buyer: cancel an order the seller has not shipped (lib/orderDisputes
-  // canBuyerCancelUnshipped) for an automatic refund (lib/orderRefunds).
+  // Buyer: ask to cancel an order the seller has not shipped (lib/orderDisputes
+  // canBuyerCancelUnshipped). It files a support ticket; the team refunds.
   const [cancelBusyGroup, setCancelBusyGroup] = useState<string | null>(null);
   const cancelUnshipped = async (transferGroup: string) => {
     if (!window.confirm(t('orderActions.cancelUnshippedConfirm'))) return;
@@ -1042,8 +1042,7 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'cancel failed');
-      showToast(t('orderActions.cancelUnshippedDone'), 'success');
-      await fetchOrders();
+      showToast(t(data?.alreadyOpen ? 'orderActions.cancelUnshippedAlready' : 'orderActions.cancelUnshippedDone'), 'success');
     } catch (err) {
       console.error('Cancel unshipped failed:', err);
       showToast(t('orderActions.cancelUnshippedFailed'), 'error');
@@ -2205,9 +2204,9 @@ const Profile: React.FC<ProfileProps> = ({ user, rewardsFrame, onNavigatePartner
                           {t('orderActions.receivedEarly')}
                         </button>
                       )}
-                      {/* Seller has not shipped: from day four the buyer may cancel for an
-                          automatic refund (lib/orderDisputes, lib/orderRefunds). Before
-                          that, say when they can. */}
+                      {/* Seller has not shipped: from day four the buyer may ask to
+                          cancel (a support ticket; the team refunds). Before that, say
+                          when they can. */}
                       {!order.break_spot_id && group.every((o) => isUnshippedOrder(o, o.shipping_labels?.[0])) && (
                         group.every((o) => canBuyerCancelUnshipped(o, o.shipping_labels?.[0])) ? (
                           <button
