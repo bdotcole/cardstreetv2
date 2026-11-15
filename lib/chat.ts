@@ -64,6 +64,39 @@ export function chatBanForStrike(strike: number): { hours: number } | 'permanent
     return hours ? { hours } : null;
 }
 
+// A refused message sent again unchanged, in the same conversation, within
+// this window is the same strike, not a new one. The composer hands a refused
+// draft back, and a sender who presses Send again without reading the reason
+// has not broken the rule twice. On 2026-11-08 a seller asking for a phone
+// number to get a parcel registered at the counter sent the same text twice
+// in 3 seconds, and the warning became a 48-hour suspension.
+export const CHAT_REPEAT_REFUSAL_MS = 10 * 60_000;
+
+/** One of the sender's refused messages, as chat_strikes keeps it. */
+export interface RefusedMessage {
+    body: string;
+    threadId: string | null;
+    createdAt: string;
+}
+
+const refusalKey = (body: string) => body.replace(/\s+/g, ' ').trim();
+
+/** Whether `next` resends one of `recent` (the sender's refused messages), so it counts as no new strike. */
+export function isRepeatRefusal(
+    recent: RefusedMessage[],
+    next: { body: string; threadId: string | null },
+    now: number = Date.now(),
+): boolean {
+    const key = refusalKey(next.body);
+    return recent.some((r) => {
+        const at = Date.parse(r.createdAt);
+        return Number.isFinite(at)
+            && now - at <= CHAT_REPEAT_REFUSAL_MS
+            && (r.threadId ?? null) === (next.threadId ?? null)
+            && refusalKey(r.body) === key;
+    });
+}
+
 /** Desktop: opens the chat dialog, optionally straight into a conversation. */
 export const CHAT_OPEN_EVENT = 'cs:openChat';
 export interface ChatOpenDetail {

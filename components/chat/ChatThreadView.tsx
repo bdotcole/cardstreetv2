@@ -128,7 +128,9 @@ export default function ChatThreadView({ other = null, viewerId, threadId: initi
 
     const send = async () => {
         const body = draft.trim();
-        if (!body || sending || suspended || (!threadId && !peer)) return;
+        // A refused draft sends again only once it is edited: the same text
+        // would only be refused again.
+        if (!body || sending || suspended || refusal || (!threadId && !peer)) return;
         const tempId = `local-${Date.now()}`;
         setMessages((prev) => [...prev, { id: tempId, senderId: viewerId, body, createdAt: new Date().toISOString(), pending: true }]);
         setDraft('');
@@ -304,7 +306,7 @@ export default function ChatThreadView({ other = null, viewerId, threadId: initi
                 />
                 <button
                     onClick={() => { void send(); }}
-                    disabled={!draft.trim() || sending || suspended}
+                    disabled={!draft.trim() || sending || suspended || !!refusal}
                     aria-label={t('chat.send')}
                     className="w-11 h-11 rounded-full bg-brand-cyan text-brand-darker flex items-center justify-center shrink-0 active:scale-95 transition-all disabled:opacity-40"
                 >

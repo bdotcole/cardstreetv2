@@ -8,7 +8,7 @@
  * No network, no DB. Exit 1 on any failure.
  */
 import { CHAT_MASK, findOffPlatform, maskOffPlatform, type OffPlatformKind } from '@/lib/chatPolicy';
-import { chatBanForStrike } from '@/lib/chat';
+import { CHAT_REPEAT_REFUSAL_MS, chatBanForStrike, isRepeatRefusal, type RefusedMessage } from '@/lib/chat';
 
 const TEAM_OUTREACH = `สวัสดีครับ ทีม Cardstreet ติดต่อมาเรื่องคำสั่งซื้อ 2 รายการของร้านที่ยังแสดงสถานะ "ป้ายพร้อมแล้ว" ในระบบครับ
 - เลขพัสดุ TH670398RNV70F (ドラメシヤ 100 บาท)
@@ -150,5 +150,27 @@ for (const [strike, want] of LADDER) {
     }
 }
 
-console.log(`${BLOCKED.length} blocked, ${ALLOWED.length} allowed, ${MASKED.length} masked, ${LADDER.length} ladder; ${failures} failure(s)`);
+// A refused message resent unchanged straight away is one strike, not two.
+const NOW = Date.parse('2026-11-08T06:21:00Z');
+const ASK = 'ขอเบอร์โทรติดต่อได้ไมคับ จะได้ลงทะเบียน มันยิงโค็ดไม่ได้';
+const THREAD = 'ce30986e-0ad8-42fa-a400-7859d678b0f3';
+const ago = (ms: number) => new Date(NOW - ms).toISOString();
+const REPEATS: Array<[string, RefusedMessage[], { body: string; threadId: string | null }, boolean]> = [
+    ['same text 3 s later', [{ body: ASK, threadId: THREAD, createdAt: ago(3_000) }], { body: ASK, threadId: THREAD }, true],
+    ['same text, spacing differs', [{ body: ASK, threadId: THREAD, createdAt: ago(60_000) }], { body: ` ${ASK.replace(' ', '\n')} `, threadId: THREAD }, true],
+    ['same text just inside the window', [{ body: ASK, threadId: THREAD, createdAt: ago(CHAT_REPEAT_REFUSAL_MS - 1_000) }], { body: ASK, threadId: THREAD }, true],
+    ['same text after the window', [{ body: ASK, threadId: THREAD, createdAt: ago(CHAT_REPEAT_REFUSAL_MS + 1_000) }], { body: ASK, threadId: THREAD }, false],
+    ['edited text', [{ body: ASK, threadId: THREAD, createdAt: ago(3_000) }], { body: `${ASK} ด่วนครับ`, threadId: THREAD }, false],
+    ['same text, another conversation', [{ body: ASK, threadId: THREAD, createdAt: ago(3_000) }], { body: ASK, threadId: null }, false],
+    ['no earlier refusal', [], { body: ASK, threadId: THREAD }, false],
+];
+for (const [label, recent, next, want] of REPEATS) {
+    const got = isRepeatRefusal(recent, next, NOW);
+    if (got !== want) {
+        failures++;
+        console.log(`FAIL repeat "${label}": got ${got}`);
+    }
+}
+
+console.log(`${BLOCKED.length} blocked, ${ALLOWED.length} allowed, ${MASKED.length} masked, ${LADDER.length} ladder, ${REPEATS.length} repeat; ${failures} failure(s)`);
 process.exit(failures ? 1 : 0);

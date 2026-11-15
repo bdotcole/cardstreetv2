@@ -1,7 +1,7 @@
 import 'server-only';
 import * as Sentry from '@sentry/nextjs';
 import type { createAdminClient } from '@/lib/supabase/admin';
-import { chatBanForStrike, type ChatBanState } from '@/lib/chat';
+import { CHAT_REPEAT_REFUSAL_MS, chatBanForStrike, isRepeatRefusal, type ChatBanState } from '@/lib/chat';
 import type { OffPlatformKind } from '@/lib/chatPolicy';
 import { isMissingSchema } from '@/lib/chat.server';
 
@@ -30,22 +30,53 @@ export function chatBanState(row: ChatBanRow | null | undefined): ChatBanState |
     return { until: new Date(ms).toISOString(), permanent: false };
 }
 
+/** The sender's strikes for life; at least 1 once one has been recorded. */
+async function countStrikes(admin: Admin, userId: string): Promise<number> {
+    const counted = await admin.from('chat_strikes').select('id', { count: 'exact', head: true }).eq('user_id', userId);
+    return typeof counted.count === 'number' && counted.count > 0 ? counted.count : 1;
+}
+
+/** Whether this refusal repeats one the sender just had (lib/chat.ts:isRepeatRefusal). False when unsure. */
+async function resendsRecentStrike(admin: Admin, userId: string, body: string, threadId: string | null): Promise<boolean> {
+    const since = new Date(Date.now() - CHAT_REPEAT_REFUSAL_MS).toISOString();
+    const { data, error } = await admin
+        .from('chat_strikes')
+        .select('body, thread_id, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(20)
+        .returns<{ body: string; thread_id: string | null; created_at: string }[]>();
+    if (error || !data) return false;
+    return isRepeatRefusal(
+        data.map((r) => ({ body: r.body, threadId: r.thread_id, createdAt: r.created_at })),
+        { body, threadId },
+    );
+}
+
 /**
  * Record a refused message against its sender and apply the ban the ladder
- * says. Fails soft: without the migration the message is still refused,
+ * says. Sending the same refused text again in the same conversation within
+ * CHAT_REPEAT_REFUSAL_MS counts once. Fails soft: without the migration the message is still refused,
  * but strike 0 comes back and nothing is banned.
  */
 export async function recordChatStrike(
     admin: Admin,
     { userId, kind, body, threadId }: { userId: string; kind: OffPlatformKind; body: string; threadId: string | null },
 ): Promise<{ strike: number; ban: ChatBanState | null }> {
+    // The same refused text sent again straight away is the strike already
+    // recorded: answer with where the sender stands, and escalate nothing.
+    if (await resendsRecentStrike(admin, userId, body, threadId)) {
+        const { data: current } = await admin.from('profiles').select('chat_banned_until').eq('id', userId).maybeSingle<ChatBanRow>();
+        return { strike: await countStrikes(admin, userId), ban: chatBanState(current) };
+    }
+
     const inserted = await admin.from('chat_strikes').insert({ user_id: userId, kind, body, thread_id: threadId });
     if (inserted.error) {
         if (!isMissingSchema(inserted.error)) console.error('[chat] strike insert failed:', inserted.error.message);
         return { strike: 0, ban: null };
     }
-    const counted = await admin.from('chat_strikes').select('id', { count: 'exact', head: true }).eq('user_id', userId);
-    const strike = typeof counted.count === 'number' && counted.count > 0 ? counted.count : 1;
+    const strike = await countStrikes(admin, userId);
 
     const rule = chatBanForStrike(strike);
     if (!rule) return { strike, ban: null };

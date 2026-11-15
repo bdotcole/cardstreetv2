@@ -12,7 +12,8 @@
  * offer to sell unlisted cards is refused with 422 OFF_PLATFORM
  * (lib/chatPolicy) and never stored. Each refusal is a strike
  * (lib/chatModeration.server): the first a warning, the second a 48-hour
- * chat suspension, the third 7 days, the fourth for good. A suspended
+ * chat suspension, the third 7 days, the fourth for good. The same text
+ * resent in the same conversation within 10 minutes counts once. A suspended
  * sender gets 403 CHAT_BANNED before anything else is checked.
  */
 
