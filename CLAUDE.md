@@ -461,6 +461,17 @@ CardStreet is Thailand-first and bilingual (Thai + English), built so adding mar
 
 > Expansion roadmap (TH → SEA → US), phase status, and the open follow-ups (hreflang on the other `'use client'` content pages, language-toggle URL navigation, per-locale OG/JSON-LD) live in the agent memory note `project_i18n_market_expansion.md`, not here.
 
+## Set browser (`/sets`) and the set switcher
+
+`/sets` is the desktop card database: pick a game (tabs), a language (segmented control, multi-language games only), then a set. One game in one language is on screen at a time, cut into sections with a sticky jump list. Before 2026-11-13 it was a single grid of every set in the catalog (about 1,400) with English, Japanese and Thai prints interleaved.
+
+- **Sections come from `lib/setGroups.ts`, not from `pokemon_sets.series`.** That column is a real era for English Pokémon, the placeholder "Pokémon (JP)" / "Pokémon (TH)" for half the Japanese and Thai rows, empty for Thai starter decks, Scryfall's set type for Magic and the game's own name everywhere else. `setGroupFor` reads Pokémon's era from the series, then the set code, then the date; One Piece is cut by product line (from the id), Magic by set type, the rest by year. A shelf under 25 sets (Lorcana, Riftbound) is one flat grid. A newly ingested Pokémon era needs a row in `POKEMON_ERAS` and its code prefix in `CODE_TO_ERA`.
+- **The choice lives in the URL**: `/sets?game=onepiece&lang=ja` (`lang` is the catalog code, `ja`; `jp` is accepted). Written with `replaceState`, read with `useSearchParams`, so Back from a set page returns to the same shelf. The canonical stays `/sets`. A Thai-language visitor opens on Thai prints where a game has them.
+- **Every set link stays in the server HTML.** `/sets` is the hub the catalog is linked from and crawlers never click a tab, so the shelves that are not open render as `<nav hidden>` link lists (`SetDirectory` in `components/desktop/DesktopSetsBrowser.tsx`) and only the open one carries tiles. Do not replace this with client-only rendering of the active tab.
+- **Typed search is universal**: it searches every game and language (name, printed code, id, section name) and hides the tabs while a query is typed, the same rule as the app's Explore search.
+- **Tile art** is `components/desktop/SetTileArt.tsx`: a plain lazy `<img>` that falls through logo, pack photo, symbol, then a wordmark with the set code. Lighter than the app's `components/SetArtwork.tsx` on purpose (up to 646 tiles on a heavily crawled page). The fallback pictures come from `lib/setArt.ts:resolveMissingSetArt`, shared with `/api/sets` so a set shows the same art in the app and on desktop. Scryfall's black set symbols are inverted in the dark theme only.
+- **Set pages** (`/sets/<id>`) carry `components/desktop/DesktopSetSwitcher.tsx`: older / newer arrows (server-rendered links from `getSetPageData`'s `neighbors`, ordered by release date within the set's game and language) and a **Change set** picker whose list is fetched from `/api/sets` only when the button is reached for. The breadcrumb's game and language crumbs link back into the browser on that shelf.
+
 ## Conventions
 
 - Avoid emojis in code, comments, and UI unless the user explicitly asks for them.

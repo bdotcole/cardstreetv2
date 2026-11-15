@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { getSetPageData, type SetRow } from '@/lib/setPageData';
 import { buildAlternates, localePrefix, localizedUrl, requestPathLocale, BASE_URL } from '@/lib/i18nRouting';
 import { getSetLogoUrl } from '@/lib/imageUtils';
-import { getGameLabel, thaiCardNoun } from '@/lib/games';
+import { GAMES, getGameLabel, thaiCardNoun } from '@/lib/games';
 import { getSetIntro } from '@/lib/setLanding';
 import { setTitleName, withEnglishLanguage, withThaiLanguage } from '@/lib/setCodes';
+import { SET_LANGUAGE_LABELS } from '@/lib/setGroups';
 import { buildSetSummary } from '@/lib/setSummary';
 import DesktopSetCards from '@/components/desktop/DesktopSetCards';
+import DesktopSetSwitcher from '@/components/desktop/DesktopSetSwitcher';
 import LandingCtaRow from '@/components/desktop/LandingCtaRow';
 import type { Card } from '@/types';
 
@@ -91,11 +93,18 @@ function buildItemListJsonLd(set: SetRow, cards: Card[], lang: 'EN' | 'TH', path
 
 export default async function DesktopSetPage({ params }: { params: Promise<{ setId: string }> }) {
     const { setId } = await params;
-    const { set, cards } = await getSetPageData(setId);
+    const { set, cards, neighbors } = await getSetPageData(setId);
     if (!set) notFound();
 
     const lang = await resolveLang();
     const game = gameLabel(set.game, lang);
+    // The crumbs between "Sets" and this set open the browser on this set's
+    // own shelf (/sets?game=...&lang=...), so "up" from a Thai One Piece set is
+    // the Thai One Piece sets and not the top of the whole catalog. The
+    // language crumb only exists where a game has more than one.
+    const languageLabel = GAMES.find((g) => g.id === set.game && g.languages.length > 1)
+        ? SET_LANGUAGE_LABELS[set.language]?.[lang === 'EN' ? 'en' : 'th']
+        : undefined;
     const logo = set.logo_url ? getSetLogoUrl(set.logo_url, 300, 85) : null;
     const intro = getSetIntro(setId);
     const summary = buildSetSummary(set, cards, lang);
@@ -116,24 +125,40 @@ export default async function DesktopSetPage({ params }: { params: Promise<{ set
                 <span className="mx-2">›</span>
                 <Link href={`${prefix}/sets`} className="hover:text-slate-300 transition-colors">{lang === 'EN' ? 'Sets' : 'ชุดการ์ด'}</Link>
                 <span className="mx-2">›</span>
+                <Link href={`${prefix}/sets?game=${set.game}`} className="hover:text-slate-300 transition-colors">{game}</Link>
+                <span className="mx-2">›</span>
+                {languageLabel && (
+                    <>
+                        <Link href={`${prefix}/sets?game=${set.game}&lang=${set.language}`} className="hover:text-slate-300 transition-colors">{languageLabel}</Link>
+                        <span className="mx-2">›</span>
+                    </>
+                )}
                 <span className="text-slate-300">{set.name}</span>
             </nav>
 
-            <header className="flex items-center gap-5 mt-6">
-                {logo && (
-                    <div className="relative w-28 h-16 shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={logo} alt={set.name} className="w-full h-full object-contain object-left" />
+            <header className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 mt-6">
+                <div className="flex min-w-0 items-center gap-5">
+                    {logo && (
+                        <div className="relative w-28 h-16 shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={logo} alt={set.name} className="w-full h-full object-contain object-left" />
+                        </div>
+                    )}
+                    <div className="min-w-0">
+                        <h1 className="text-2xl font-black text-white">{set.name}</h1>
+                        <p className="text-sm text-slate-400 mt-1">
+                            {game}
+                            {` · ${cards.length} ${lang === 'EN' ? 'cards' : 'ใบ'}`}
+                            {set.release_date ? ` · ${new Date(set.release_date).getFullYear()}` : ''}
+                        </p>
                     </div>
-                )}
-                <div>
-                    <h1 className="text-2xl font-black text-white">{set.name}</h1>
-                    <p className="text-sm text-slate-400 mt-1">
-                        {game}
-                        {` · ${cards.length} ${lang === 'EN' ? 'cards' : 'ใบ'}`}
-                        {set.release_date ? ` · ${new Date(set.release_date).getFullYear()}` : ''}
-                    </p>
                 </div>
+                <DesktopSetSwitcher
+                    set={{ id: set.id, name: set.name, game: set.game, language: set.language }}
+                    newer={neighbors.newer}
+                    older={neighbors.older}
+                    pathPrefix={prefix}
+                />
             </header>
 
             {intro && (

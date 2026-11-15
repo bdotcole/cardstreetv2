@@ -196,7 +196,8 @@ export default async function GameLandingPage({ params }: { params: Promise<{ sl
                         <h2 className="text-xl font-black text-white">
                             {isThai ? 'ชุดการ์ดล่าสุด' : 'Latest sets'}
                         </h2>
-                        <Link href={`${prefix}/sets`} className="text-xs font-bold text-brand-cyan hover:text-cyan-300 transition-colors">
+                        {/* Opens the set browser on this game's tab, not on the default one. */}
+                        <Link href={`${prefix}/sets?game=${landing.gameId}`} className="text-xs font-bold text-brand-cyan hover:text-cyan-300 transition-colors">
                             {isThai ? 'ดูทุกชุด →' : 'Browse all sets →'}
                         </Link>
                     </div>
