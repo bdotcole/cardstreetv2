@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { authCheckUnavailable } from '@/lib/supabase/authCheck';
 import { Card } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
 import { trackEngagement } from '@/lib/engagementEvents';
@@ -23,9 +24,16 @@ export function useWishlist(): UseWishlistReturn {
         const supabase = createClient();
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
 
             if (!user) {
+                // No connection is not "signed out": keep the wishlist that
+                // is on screen (see authCheckUnavailable).
+                if (authCheckUnavailable(authError)) {
+                    setError(authError?.message || 'Could not reach the server');
+                    return;
+                }
+
                 // Guest user - return empty wishlist
                 setWishlist([]);
                 setIsLoading(false);

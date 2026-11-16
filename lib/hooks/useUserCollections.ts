@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { authCheckUnavailable } from '@/lib/supabase/authCheck';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, OrphanListing } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
 import { trackEngagement } from '@/lib/engagementEvents';
@@ -55,9 +56,16 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const epochAtStart = localEpochRef.current;
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
 
             if (!user) {
+                // No connection is not "signed out": keep the Vault that is
+                // on screen and let the next reload catch up.
+                if (authCheckUnavailable(authError)) {
+                    setError(authError?.message || 'Could not reach the server');
+                    return;
+                }
+
                 // Guest user - return empty collections
                 setCollections([]);
                 setOrphanListings([]);
@@ -537,9 +545,8 @@ export function useUserCollections(): UseUserCollectionsReturn {
         const orphanInGroup = (orphan: OrphanListing) => `${orphan.cardId}|${orphan.condition}` === groupKey;
 
         // What the entry looks like now, to put back if the write fails. A
-        // reload must not be used for that: the usual reason a write fails is
-        // no connection, and with no connection getUser() comes back empty,
-        // which loadCollections reads as signed out and empties the Vault.
+        // reload cannot do that: the usual reason a write fails is no
+        // connection, and then the reload fails too.
         const itemsBefore = new Map<string, UserCollectionItem>();
         collections.forEach(col => col.items.forEach(item => {
             if (inGroup(item)) itemsBefore.set(item.id, item);

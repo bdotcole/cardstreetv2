@@ -32,6 +32,8 @@ Both the browser and server clients route their `fetch` through **`lib/supabase/
 
 `instrumentation-client.ts` also installs **`lib/domMutationGuard.ts`** before hydration: `Node.prototype.removeChild/insertBefore` skip a node that something outside React (browser page translation, in-app browsers) has moved, instead of throwing NotFoundError and crashing the page to the error boundary. It reports one warning per page load (`area:dom-guard`, with a `translated` tag) so a bug of our own that trips it stays visible.
 
+**A null user from `supabase.auth.getUser()` is not always "signed out".** auth-js does not throw when it cannot reach the auth server (no connection, 502/503/504): it returns `{ data: { user: null }, error }`, the same shape as a missing session. **`lib/supabase/authCheck.ts:authCheckUnavailable(error)`** tells the two apart, and `useUserCollections` / `useWishlist` keep what is on screen when it is true. Before 2026-11-16 they emptied the Vault instead, and that was not rare: auth-js fires `SIGNED_IN` (so the Vault reloads) every time the app returns to the foreground, the moment a phone's connection is least likely to be up. Code that clears state on a null user must check it first.
+
 ## Auth password policy
 
 The Supabase Auth (GoTrue) password policy is enforced by the **dashboard** (Authentication → Policies) — that is the source of truth. Currently: **min 6 chars + one lowercase + one uppercase + one digit** (symbols not required), plus Supabase's breached-password (HaveIBeenPwned) check, which rejects common/leaked passwords like `Password1`.
