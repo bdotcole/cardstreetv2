@@ -668,6 +668,7 @@ export default function HomePage() {
         addCardToCollection,
         removeCardFromCollection,
         updateCollectionItem,
+        removeListedGroup,
         refreshCollections
     } = useUserCollections();
 
@@ -2134,7 +2135,8 @@ export default function HomePage() {
                 throw new Error('Listing no longer active');
             }
 
-            await fetchGlobalListings();
+            // Explore's price overlay; the editor does not wait on it.
+            void fetchGlobalListings();
             if (colId) {
                 // listingPrice is derived from the listings table; merge locally
                 // so the Vault reflects the new ask without a full reload.
@@ -2168,7 +2170,7 @@ export default function HomePage() {
                 await refreshCollections();
                 throw new Error('Listing no longer active');
             }
-            await fetchGlobalListings();
+            void fetchGlobalListings();
             await refreshCollections();
             showToast(t('vault.quantityUpdated'), 'success');
         } catch (error) {
@@ -2185,16 +2187,24 @@ export default function HomePage() {
     // derived from the DB `listings` table (see useUserCollections), so the
     // real removal is cancelling that listing — flipping a local flag alone
     // would reappear on the next reload.
-    const handleRemoveListing = async (colId: string, item: UserCollectionItem, card: Card) => {
+    //
+    // The entry leaves the screen the moment the seller confirms and the
+    // cancel runs behind it (removeListedGroup puts the entry back if the
+    // cancel fails, then re-derives the Vault from the DB on its own). It used
+    // to stay on screen, with nothing to say the tap had registered, until the
+    // cancel, a marketplace refetch and a full vault reload had each finished
+    // in turn: about eleven round trips on a phone.
+    const handleRemoveListing = async (_colId: string, item: UserCollectionItem, card: Card) => {
         try {
-            // No active listing matched (already removed/sold) still falls
-            // through to the refresh below, which reconciles the stale UI.
-            await marketplaceService.cancelListingForCard(card.id, item.condition);
+            // No live listing matched (already removed/sold) resolves like a
+            // removal: the entry was stale, and the reload confirms it.
+            await removeListedGroup(
+                item.listedGroupKey ?? `${item.cardId}|${item.condition}`,
+                () => marketplaceService.cancelListingForCard(card.id, item.condition),
+            );
 
-            // Refresh global marketplace + re-derive the Vault listing flags
-            // from the DB so the removed card drops out of Active Listings.
-            await fetchGlobalListings();
-            await refreshCollections();
+            // Explore's price overlay. Not awaited: nothing here depends on it.
+            void fetchGlobalListings();
 
             showToast(t('paymentFlow.listingRemoved') || 'Listing removed from the market.', 'success');
         } catch (error) {

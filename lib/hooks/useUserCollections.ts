@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, UserCollectionItem, CardCondition, CustomCollection, OrphanListing } from '@/types';
 import { ensureUserProfile } from '@/lib/utils/ensureUserProfile';
@@ -20,8 +20,18 @@ interface UseUserCollectionsReturn {
     addCardToCollection: (collectionId: string, card: Card, details?: Partial<UserCollectionItem>) => Promise<void>;
     removeCardFromCollection: (collectionId: string, itemId: string) => Promise<void>;
     updateCollectionItem: (collectionId: string, itemId: string, updates: Partial<UserCollectionItem>) => Promise<void>;
+    /**
+     * Take one market group (the `listedGroupKey` of a Listings entry) off the
+     * screen at once and run `write`, the call that really cancels it, behind
+     * that. Resolves when the write has landed; if it throws, the entry is
+     * put back and the error rethrown.
+     */
+    removeListedGroup: (groupKey: string, write: () => Promise<unknown>) => Promise<void>;
     refreshCollections: () => Promise<void>;
 }
+
+/** The market group a listed item belongs to; the Vault's Listings view keys its entries the same way. */
+const listedGroupKeyOf = (item: UserCollectionItem) => item.listedGroupKey ?? `${item.cardId}|${item.condition}`;
 
 export function useUserCollections(): UseUserCollectionsReturn {
     const [collections, setCollections] = useState<CustomCollection[]>([]);
@@ -29,8 +39,20 @@ export function useUserCollections(): UseUserCollectionsReturn {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Bookkeeping for removeListedGroup. A reload reads the database, and one
+    // that read it before a removal's write landed would put the entry the
+    // seller just removed back on screen until the next reload. So a reload is
+    // thrown away when a write is still in flight, or when a removal started
+    // or settled after the reload began; once the last write has settled, a
+    // reload is started if any of them landed, so the database always has
+    // the final word.
+    const writesInFlightRef = useRef(0);
+    const localEpochRef = useRef(0);
+    const reloadOwedRef = useRef(false);
+
     const loadCollections = async () => {
         const supabase = createClient();
+        const epochAtStart = localEpochRef.current;
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -249,6 +271,9 @@ export function useUserCollections(): UseUserCollectionsReturn {
                     createdAt: rep.created_at,
                 };
             });
+
+            // Stale against a removal the screen already shows (see the refs above).
+            if (writesInFlightRef.current > 0 || epochAtStart !== localEpochRef.current) return;
 
             setCollections(collectionsWithItems);
             setOrphanListings(orphans);
@@ -507,6 +532,63 @@ export function useUserCollections(): UseUserCollectionsReturn {
         }
     };
 
+    const removeListedGroup = async (groupKey: string, write: () => Promise<unknown>) => {
+        const inGroup = (item: UserCollectionItem) => !!item.isListing && listedGroupKeyOf(item) === groupKey;
+        const orphanInGroup = (orphan: OrphanListing) => `${orphan.cardId}|${orphan.condition}` === groupKey;
+
+        // What the entry looks like now, to put back if the write fails. A
+        // reload must not be used for that: the usual reason a write fails is
+        // no connection, and with no connection getUser() comes back empty,
+        // which loadCollections reads as signed out and empties the Vault.
+        const itemsBefore = new Map<string, UserCollectionItem>();
+        collections.forEach(col => col.items.forEach(item => {
+            if (inGroup(item)) itemsBefore.set(item.id, item);
+        }));
+        const orphansBefore = orphanListings.filter(orphanInGroup);
+
+        writesInFlightRef.current++;
+        localEpochRef.current++;
+        setCollections(prev => prev.map(col => col.items.some(inGroup)
+            ? {
+                ...col,
+                items: col.items.map(item => inGroup(item)
+                    ? { ...item, isListing: false, listingPrice: undefined, listingStatus: undefined, listedUnits: undefined, listedGroupKey: undefined }
+                    : item),
+            }
+            : col));
+        setOrphanListings(prev => prev.filter(orphan => !orphanInGroup(orphan)));
+
+        try {
+            await write();
+            reloadOwedRef.current = true;
+        } catch (err) {
+            setCollections(prev => prev.map(col => col.items.some(item => itemsBefore.has(item.id))
+                ? {
+                    ...col,
+                    items: col.items.map(item => {
+                        const before = itemsBefore.get(item.id);
+                        return before
+                            ? { ...item, isListing: before.isListing, listingPrice: before.listingPrice, listingStatus: before.listingStatus, listedUnits: before.listedUnits, listedGroupKey: before.listedGroupKey }
+                            : item;
+                    }),
+                }
+                : col));
+            setOrphanListings(prev => [...prev, ...orphansBefore.filter(orphan => !prev.some(p => p.id === orphan.id))]);
+            throw err;
+        } finally {
+            writesInFlightRef.current--;
+            localEpochRef.current++;
+            // Quiet (no isLoading): the screen already shows the result, this
+            // only settles what a local edit cannot know, such as another
+            // condition's rows now matching the vault item. Only after a
+            // write that landed; a failed one changed nothing to re-read.
+            if (writesInFlightRef.current === 0 && reloadOwedRef.current) {
+                reloadOwedRef.current = false;
+                void loadCollections();
+            }
+        }
+    };
+
     const refreshCollections = async () => {
         setIsLoading(true);
         await loadCollections();
@@ -523,6 +605,7 @@ export function useUserCollections(): UseUserCollectionsReturn {
         addCardToCollection,
         removeCardFromCollection,
         updateCollectionItem,
+        removeListedGroup,
         refreshCollections
     };
 }
