@@ -110,6 +110,14 @@ export const LANGUAGE_TOKENS: Record<'en' | 'ja' | 'th', string[]> = {
 export const RARITY_TOKENS = ['sar', 'sir', 'ar', 'sr', 'ur', 'hr', 'chr', 'csr', 'rr', 'rrr', 'ssr', 'promo'];
 
 /**
+ * Words people type between two names where the card prints "&": "blastoise
+ * and piplup" is "Blastoise & Piplup-GX", "red and blue" is "Red & Blue". They
+ * are never required of a row: as a name fragment "and" matched nothing on the
+ * card and emptied the search. Compared as fold keys.
+ */
+export const JOINING_WORDS = new Set(['and', 'และ', 'กับ', 'と']);
+
+/**
  * Shopping and collecting vocabulary. These are never typo-corrected into a
  * Pokémon: with loose matching on, "holo" became Hoothoot, "sleeve" Drowzee,
  * "trainer" Nosepass and การ์ด (card) Growlithe.

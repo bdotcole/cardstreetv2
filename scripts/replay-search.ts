@@ -204,6 +204,15 @@ const T: Record<string, Target> = {
     charmander: rx(/charmander/i, /ヒトカゲ|ฮิโตคาเงะ/),
 };
 
+// Cards that print two or three Pokémon together.
+const TOGETHER = {
+    blastoisePiplup: rx(/blastoise & piplup/i, /คาเม็กซ์ ?& ?โพจจามะ|カメックス ?[&＆] ?ポッチャマ/),
+    pikachuZekrom: rx(/pikachu & zekrom/i, /พิคาชู ?& ?เซครอม|ピカチュウ ?[&＆] ?ゼクロム/),
+    reshiramCharizard: rx(/reshiram & charizard/i, /เรชิรัม ?& ?ลิซาร์ดอน|レシラム ?[&＆] ?リザードン/),
+    mewtwoMew: rx(/mewtwo & mew\b/i, /มิวทู ?& ?มิว|ミュウツー ?[&＆] ?ミュウ/),
+    arceusDialgaPalkia: rx(/arceus & dialga & palkia/i, /อาร์เซอุส ?& ?ดีอัลกา ?& ?พัลเกีย|アルセウス ?[&＆] ?ディアルガ ?[&＆] ?パルキア/),
+} satisfies Record<string, Target>;
+
 let dict: import('../lib/search/dictionary').SearchDictionary | null = null;
 
 // A print OF the species (root name equal to one of its names), not one that
@@ -323,6 +332,23 @@ const CASES: Case[] = [
     { cls: 'Review', q: 'mewt', key: "listed Team Rocket's Mewtwo ex", game: 'all', target: () => idIs(/^MA3-063$/) },
     { cls: 'Review', q: 'char', key: 'charizard', game: 'all', target: () => T.charizard },
     { cls: 'Review', q: 'พิคาชู', key: 'pikachu', game: 'all', target: () => T.pikachu },
+    // Two Pokémon typed together name the card that prints both (Tag Team,
+    // LEGEND). These used to return 30 prints of one or the other and never
+    // the card: best rank must be 1, in every wording.
+    ...([
+        ['blastoise and piplup', 'blastoisePiplup'], ['blastoise piplup', 'blastoisePiplup'], ['blastoise & piplup', 'blastoisePiplup'],
+        ['blastoise and piplup gx', 'blastoisePiplup'], ['blastoise piplup ex', 'blastoisePiplup'],
+        ['คาเม็กซ์ และ โพจจามะ', 'blastoisePiplup'], ['คาเม็กซ์ โพจจามะ', 'blastoisePiplup'], ['คาเม็กซ์โพจจามะ', 'blastoisePiplup'],
+        ['pikachu & zekrom', 'pikachuZekrom'], ['pikachu and zekrom', 'pikachuZekrom'], ['zekrom pikachu', 'pikachuZekrom'],
+        ['reshiram and charizard gx', 'reshiramCharizard'], ['mewtwo and mew', 'mewtwoMew'], ['mew mewtwo', 'mewtwoMew'],
+        ['arceus dialga palkia', 'arceusDialgaPalkia'], ['blastois and piplap', 'blastoisePiplup'],
+    ] as Array<[string, keyof typeof TOGETHER]>).map(([q, key]): Case => ({ cls: 'Together', q, key, game: 'all', target: () => TOGETHER[key] })),
+    { cls: 'Together', q: 'blastoise piplup', key: 'blastoisePiplup', language: 'th', game: 'pokemon', target: () => TOGETHER.blastoisePiplup },
+    // No such card: both Pokémon's own prints, as before.
+    { cls: 'Together', q: 'pikachu charizard', key: 'pikachu or charizard', game: 'all', target: () => (c) => T.pikachu(c) || T.charizard(c) },
+    // The same family without a Pokémon in the name: "&" typed as a word.
+    { cls: 'Together', q: 'red and blue', key: 'Red & Blue', game: 'all', target: () => nameIs(/^red & blue/i) },
+    { cls: 'Together', q: 'cynthia and caitlin', key: 'Cynthia & Caitlin', game: 'all', target: () => nameIs(/^cynthia & caitlin/i) },
 ];
 
 // ── Run ──

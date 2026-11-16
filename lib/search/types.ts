@@ -51,6 +51,14 @@ export interface GroupMatch {
     distance: number;
     /** The dictionary name the query matched. */
     matched: string;
+    /**
+     * Which typed name this came from. Matches that share a slot are readings
+     * of ONE name (Nidoran♀ / Nidoran♂ for "nidoran"); different slots are
+     * names typed side by side ("blastoise piplup"), which is how a card that
+     * prints both ("Blastoise & Piplup-GX") is told apart from either
+     * Pokémon's own prints. Absent = slot 0.
+     */
+    slot?: number;
 }
 
 export interface ModifierMatch {
@@ -91,4 +99,19 @@ export interface Resolution {
      * legs; callers retry without them when that returns nothing.
      */
     residual: string[];
+}
+
+/**
+ * The species of a resolution, one list per typed name (GroupMatch.slot).
+ * Two or more lists means the query named several Pokémon side by side.
+ */
+export function nameSlots(res: Resolution | null | undefined): GroupMatch[][] {
+    const bySlot = new Map<number, GroupMatch[]>();
+    for (const gm of res?.groups ?? []) {
+        const slot = gm.slot ?? 0;
+        const list = bySlot.get(slot);
+        if (list) list.push(gm);
+        else bySlot.set(slot, [gm]);
+    }
+    return [...bySlot.values()];
 }

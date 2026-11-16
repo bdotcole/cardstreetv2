@@ -13,6 +13,12 @@
  *      residual
  *   0  reached some other way
  *
+ * A query that names two or more Pokémon side by side ("blastoise piplup",
+ * "pikachu & zekrom") asks for the card that prints them together: a row
+ * naming every one of them is band 4, and a print of just one of them drops
+ * to band 3. Without that, "blastoise and piplup" listed 30 Blastoise and
+ * Piplup prints and never the Tag Team card.
+ *
  * Species names derived from the dictionary earn ONLY band 4 (or the weak
  * band 1), never prefix credit: リザード (Charmeleon) is a prefix of every
  * リザードン (Charizard), and prefix credit for it put Japanese Charizard
@@ -21,8 +27,8 @@
  */
 
 import { foldKey, type Script } from './normalize';
-import type { Modifier } from './modifiers';
-import type { MatchKind, QueryAnalysis, Resolution } from './types';
+import { JOINING_WORDS, type Modifier } from './modifiers';
+import { nameSlots, type MatchKind, type QueryAnalysis, type Resolution } from './types';
 
 type StripPos = 'prefix' | 'suffix' | 'any';
 
@@ -32,18 +38,34 @@ interface ModStrip {
     spellings: Array<{ key: string; pos: StripPos }>;
 }
 
+/** The Pokémon a query named side by side, when there are two or more. */
+interface Together {
+    /** How many names the query put side by side. */
+    slots: number;
+    /** Every spelling of every one of them, longest first. */
+    terms: Array<{ key: string; slot: number; w: number }>;
+}
+
 export interface ScoreContext {
     literalKey: string;
     /** The whole query's key when language/rarity words were taken out of the literal ("sirhiss"), else ''. */
     fullKey: string;
     /** Word keys of the literal, for band 2 (only when there are two or more). */
     literalTokens: string[];
+    /**
+     * The same without joining words, when that leaves two or more and differs:
+     * "red and blue" is printed "Red & Blue". Scored just under literalTokens,
+     * so "Sword of Fire and Ice" still leads for "fire and ice".
+     */
+    joinedTokens: string[];
     /** Catalog language that matches the query's script (kana/han -> ja, thai -> th). */
     sameScriptLang: 'ja' | 'th' | null;
     languagePref: Set<string>;
     rarityPref: Set<string>;
     /** Fold key of every resolved species name -> score weight (1, or 0.95 for guessed matches). */
     groupTerms: Map<string, number>;
+    /** Set when the query named two or more Pokémon side by side. */
+    together: Together | null;
     modStrips: ModStrip[];
     residualKeys: string[];
 }
@@ -102,6 +124,8 @@ function stripSpellings(mod: Modifier): Array<{ key: string; pos: StripPos }> {
 
 const GUESSED: MatchKind[] = ['late', 'prefix', 'loose', 'fuzzy'];
 
+const JOIN_KEYS = new Set(Array.from(JOINING_WORDS, foldKey).filter(Boolean));
+
 function scriptLang(script: Script): 'ja' | 'th' | null {
     if (script === 'kana' || script === 'han') return 'ja';
     if (script === 'thai') return 'th';
@@ -118,10 +142,28 @@ export function buildScoreContext(a: QueryAnalysis, res: Resolution | null): Sco
     const literalTokens = a.tokens
         .map((t) => foldKey(t.replace(/['’]s$/i, '')))
         .filter((k) => k.length > 0);
+    const withoutJoins = literalTokens.filter((k) => !JOIN_KEYS.has(k));
     const groupTerms = new Map<string, number>();
     const modStrips: ModStrip[] = [];
     const residualKeys: string[] = [];
+    let together: Together | null = null;
     if (res && res.groups.length > 0) {
+        const slots = nameSlots(res);
+        if (slots.length >= 2) {
+            const terms: Together['terms'] = [];
+            slots.forEach((list, slot) => {
+                for (const gm of list) {
+                    const w = GUESSED.includes(gm.kind) ? 0.95 : 1;
+                    const g = gm.group;
+                    for (const s of [g.en, ...g.enDb, ...g.ja, ...g.th, ...g.aliases]) {
+                        const key = foldKey(s);
+                        if (key && !terms.some((t) => t.key === key && t.slot === slot)) terms.push({ key, slot, w });
+                    }
+                }
+            });
+            terms.sort((a, b) => b.key.length - a.key.length);
+            together = { slots: slots.length, terms };
+        }
         for (const gm of res.groups) {
             const w = GUESSED.includes(gm.kind) ? 0.95 : 1;
             const g = gm.group;
@@ -140,10 +182,12 @@ export function buildScoreContext(a: QueryAnalysis, res: Resolution | null): Sco
         literalKey,
         fullKey: a.fullKey && a.fullKey !== literalKey ? a.fullKey : '',
         literalTokens: literalTokens.length >= 2 ? literalTokens : [],
+        joinedTokens: withoutJoins.length >= 2 && withoutJoins.length < literalTokens.length ? withoutJoins : [],
         sameScriptLang: scriptLang(a.script),
         languagePref: new Set(a.languagePref.map(normLang)),
         rarityPref: new Set(a.rarityPref.map((r) => foldKey(r))),
         groupTerms,
+        together,
         modStrips,
         residualKeys,
     };
@@ -229,6 +273,40 @@ function stripResiduals(key: string, residualKeys: string[]): string {
     return k;
 }
 
+/**
+ * Whether a row key prints a name from every slot, each in its own stretch of
+ * the text; `rest` is what the names leave over. Longest names first and a
+ * matched stretch is cut out, so "Mewtwo" is not also the Mew of "mew mewtwo"
+ * and only "Mewtwo & Mew-GX" names both. A two-character name (ピィ, ปี) must
+ * start the key: inside a name it is part of some other word.
+ */
+function namesEverySlot(key: string, tg: Together): { w: number; rest: string } | null {
+    let k = key;
+    let w = 1;
+    const found = new Set<number>();
+    for (const t of tg.terms) {
+        if (found.has(t.slot)) continue;
+        const at = t.key.length < 3 ? (k.startsWith(t.key) ? 0 : -1) : k.indexOf(t.key);
+        if (at < 0) continue;
+        // '|' never occurs in a fold key, so the two halves cannot join into a name.
+        k = `${k.slice(0, at)}|${k.slice(at + t.key.length)}`;
+        found.add(t.slot);
+        if (t.w < w) w = t.w;
+    }
+    return found.size === tg.slots ? { w, rest: k.replace(/\|/g, '') } : null;
+}
+
+/** True when nothing but mechanic suffixes is left ("gx", "legend", ""). */
+function onlyMechanics(key: string): boolean {
+    let k = key;
+    for (let pass = 0; pass < 3 && k; pass++) {
+        const m = MECHANIC_KEYS.find((s) => k.endsWith(s));
+        if (!m) break;
+        k = k.slice(0, k.length - m.length);
+    }
+    return k === '';
+}
+
 export function scoreName(
     row: { name?: string | null; english_name?: string | null; language?: string | null; rarity?: string | null },
     ctx: ScoreContext,
@@ -257,6 +335,9 @@ export function scoreName(
     }
     const lit = ctx.literalKey;
     const hasGroups = ctx.groupTerms.size > 0;
+    const tg = ctx.together;
+    // With several Pokémon named, a print of one of them is half the answer.
+    const speciesBand: ScoredName['band'] = tg ? 3 : 4;
     const literalKeys = [lit, ctx.fullKey].filter(Boolean);
 
     for (const f of fields) {
@@ -268,6 +349,20 @@ export function scoreName(
             else if (f.key.includes(lk)) consider(1, 50);
         }
         if (ctx.literalTokens.length >= 2 && ctx.literalTokens.every((t) => f.key.includes(t))) consider(2, 60);
+        else if (ctx.joinedTokens.length >= 2 && ctx.joinedTokens.every((t) => f.key.includes(t))) consider(2, 55);
+
+        if (tg) {
+            const stripped = stripModifiers(f.key, ctx.modStrips);
+            const all = namesEverySlot(stripped ?? f.key, tg);
+            if (all) {
+                // Missing the requested mechanic ("pikachu zekrom ex" for
+                // Pikachu & Zekrom-GX) is still the card that names them both.
+                if (stripped === null) consider(4, 80 * all.w);
+                // Exactly those Pokémon outranks a card with a third one on it
+                // ("Dialga & Palkia LEGEND" over "Arceus & Dialga & Palkia-GX").
+                else consider(4, (onlyMechanics(all.rest) ? 100 : 92) * all.w);
+            }
+        }
 
         if (hasGroups) {
             for (const [cand, candBase] of [[f.key, 100], [f.root, 90]] as Array<[string, number]>) {
@@ -275,7 +370,7 @@ export function scoreName(
                 if (stripped === null) continue;
                 const w = ctx.groupTerms.get(stripped);
                 if (w) {
-                    consider(4, candBase * w);
+                    consider(speciesBand, candBase * w);
                     continue;
                 }
                 // Root-exact once the requested modifiers are out: an owner
@@ -285,12 +380,12 @@ export function scoreName(
                 const bare = stripMechanicKey(stripped);
                 const wBare = bare !== stripped ? ctx.groupTerms.get(bare) : undefined;
                 if (wBare) {
-                    consider(4, 90 * wBare);
+                    consider(speciesBand, 90 * wBare);
                     continue;
                 }
                 if (ctx.residualKeys.length > 0) {
                     const w2 = ctx.groupTerms.get(stripMechanicKey(stripResiduals(stripped, ctx.residualKeys)));
-                    if (w2) consider(4, 90 * w2);
+                    if (w2) consider(speciesBand, 90 * w2);
                 }
             }
         }

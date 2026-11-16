@@ -23,8 +23,8 @@
  */
 
 import { clipQuery, foldKey, hiraganaToKatakana, sanitizeTerm, tokenize } from './normalize';
-import { LANGUAGE_TOKENS, RARITY_TOKENS, type Modifier } from './modifiers';
-import type { Resolution } from './types';
+import { JOINING_WORDS, LANGUAGE_TOKENS, RARITY_TOKENS, type Modifier } from './modifiers';
+import { nameSlots, type NameGroup, type Resolution } from './types';
 
 export interface NameColumns {
     name: string;
@@ -138,8 +138,10 @@ function render(node: Node | null | undefined): string | null {
 
 // ── Alternatives ──
 
+// Joining words too: "red and blue" is printed "Red & Blue", and requiring
+// "and" of the name found nothing.
 const NON_NAME_WORDS = new Set(
-    [...LANGUAGE_TOKENS.en, ...LANGUAGE_TOKENS.ja, ...LANGUAGE_TOKENS.th, ...RARITY_TOKENS].map(foldKey).filter(Boolean),
+    [...LANGUAGE_TOKENS.en, ...LANGUAGE_TOKENS.ja, ...LANGUAGE_TOKENS.th, ...RARITY_TOKENS, ...JOINING_WORDS].map(foldKey).filter(Boolean),
 );
 
 function literalAlternative(literal: string, cols: NameColumns): Node[] {
@@ -198,29 +200,33 @@ interface Budget {
     tokenAnd: boolean;
 }
 
-function groupAlternative(res: Resolution, cols: NameColumns, b: Budget): Node | null {
-    const speciesLegs: Node[] = [];
-    for (const gm of res.groups.slice(0, b.maxGroups)) {
-        const g = gm.group;
-        const english = b.enDbExtras ? [g.en, ...g.enDb] : [g.en];
-        for (const s of english) {
-            for (const v of termVariants(s)) {
-                speciesLegs.push(contains(cols.name, v));
-                if (cols.english) speciesLegs.push(contains(cols.english, v));
-            }
-        }
-        // Native names only for rows WITHOUT an English name: rows that have
-        // one are already reached by the English legs, and unrestricted short
-        // native names flood the fetch with other species (ปี is inside 112
-        // Thai names, リザード inside every リザードン).
-        for (const s of [...g.ja.slice(0, b.nativeMax), ...g.th.slice(0, b.nativeMax)]) {
-            for (const v of termVariants(s)) {
-                const leg = v.length >= 3 ? contains(cols.name, v) : startsWith(cols.name, v);
-                speciesLegs.push(cols.englishIsNull ? { op: 'and', items: [cols.englishIsNull, leg] } : leg);
-            }
+/** The legs that find one species' rows under any of its names. */
+function speciesLegs(g: NameGroup, cols: NameColumns, b: Pick<Budget, 'enDbExtras' | 'nativeMax'>): Node[] {
+    const legs: Node[] = [];
+    const english = b.enDbExtras ? [g.en, ...g.enDb] : [g.en];
+    for (const s of english) {
+        for (const v of termVariants(s)) {
+            legs.push(contains(cols.name, v));
+            if (cols.english) legs.push(contains(cols.english, v));
         }
     }
-    const species = render({ op: 'or', items: speciesLegs });
+    // Native names only for rows WITHOUT an English name: rows that have
+    // one are already reached by the English legs, and unrestricted short
+    // native names flood the fetch with other species (ปี is inside 112
+    // Thai names, リザード inside every リザードン).
+    for (const s of [...g.ja.slice(0, b.nativeMax), ...g.th.slice(0, b.nativeMax)]) {
+        for (const v of termVariants(s)) {
+            const leg = v.length >= 3 ? contains(cols.name, v) : startsWith(cols.name, v);
+            legs.push(cols.englishIsNull ? { op: 'and', items: [cols.englishIsNull, leg] } : leg);
+        }
+    }
+    return legs;
+}
+
+function groupAlternative(res: Resolution, cols: NameColumns, b: Budget): Node | null {
+    const legs: Node[] = [];
+    for (const gm of res.groups.slice(0, b.maxGroups)) legs.push(...speciesLegs(gm.group, cols, b));
+    const species = render({ op: 'or', items: legs });
     if (!species) return null;
 
     const conj: Node[] = [];
@@ -273,6 +279,44 @@ const LADDER: Budget[] = [
     { enDbExtras: false, nativeMax: 1, maxGroups: 1, residual: false, group: false, tokenAnd: true },
     { enDbExtras: false, nativeMax: 1, maxGroups: 1, residual: false, group: false, tokenAnd: false },
 ];
+
+const TOGETHER_LADDER: Array<Pick<Budget, 'enDbExtras' | 'nativeMax'>> = [
+    { enDbExtras: true, nativeMax: 3 },
+    { enDbExtras: false, nativeMax: 2 },
+    { enDbExtras: false, nativeMax: 1 },
+];
+
+/**
+ * The filter for cards that print EVERY Pokémon the query named side by side
+ * ("blastoise piplup" -> "Blastoise & Piplup-GX", "คาเม็กซ์ & โพจจามะGX"), for
+ * `.or(...)`. Null unless the resolution holds two or more names.
+ *
+ * buildNamePredicate ORs the species, and each of them alone matches more
+ * rows than a fetch returns, so the unordered LIMIT regularly dropped the few
+ * rows that name both. This is a fetch of its own beside it. It carries no
+ * modifier or leftover-word legs: it returns a handful of rows either way, and
+ * ranking deals with a mistyped mechanic ("pikachu zekrom ex").
+ */
+export function buildTogetherPredicate(opts: { resolution?: Resolution | null; cols: NameColumns }): string | null {
+    const { cols } = opts;
+    const slots = nameSlots(opts.resolution);
+    if (slots.length < 2) return null;
+    let last: string | null = null;
+    for (const step of TOGETHER_LADDER) {
+        const conj: Node[] = cols.gameEqPokemon ? [cols.gameEqPokemon] : [];
+        for (const slot of slots) {
+            const any = render({ op: 'or', items: slot.flatMap((gm) => speciesLegs(gm.group, cols, step)) });
+            // A name with no searchable spelling cannot be required.
+            if (!any) return null;
+            conj.push(any);
+        }
+        const pred = render({ op: 'and', items: conj });
+        if (!pred) return null;
+        if (encodedPredicateLength(pred) <= PREDICATE_MAX_ENCODED) return pred;
+        last = pred;
+    }
+    return last;
+}
 
 /**
  * The name filter for `.or(...)`, or null when nothing searchable remains

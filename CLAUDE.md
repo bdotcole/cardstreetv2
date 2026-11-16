@@ -320,6 +320,7 @@ Design rules future edits must not break:
 - **Romaji/European (`late`) names are phase-2-only** — many are ordinary words ("Fire" is Moltres in romaji, "Booster" is Flareon in German), so they resolve only when the literal search found nothing.
 - **Native-name DB legs only reach rows with NULL `english_name`** (short native names flood otherwise: ปี sits inside 112 Thai names). So a ja/th row with a *wrong* `english_name` is invisible to searches for its real species — label errors are search bugs, not cosmetic.
 - **Never send `foldKey`/`looseKey` output to the DB**; ILIKE legs use printed spellings via `sanitizeTerm`. Bump `FOLD_VERSION` whenever `foldKey` output changes.
+- **Two Pokémon typed together name the card that prints both** ("blastoise and piplup" is Blastoise & Piplup-GX). Each typed name keeps a slot (`GroupMatch.slot`, `nameSlots` in `lib/search/types.ts`; two readings of one name, Nidoran♀/♂, share a slot). With two or more slots a row naming every one of them is band 4 and a print of just one drops to band 3 (`score.ts`), and those rows come in a fetch of their own (`buildTogetherPredicate`), because in the species OR they are a handful among hundreds and the unordered LIMIT dropped them. Joining words (`JOINING_WORDS`: and, และ, กับ, と) are never a required name fragment: the card prints "&". Before 2026-11-15 the query returned 30 Blastoise and Piplup prints and never the Tag Team card.
 
 ## Live multistream (social simulcast)
 

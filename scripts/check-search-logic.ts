@@ -18,6 +18,7 @@ import { analyzeQuery, resolveExact, resolveForFilter, resolveLoose } from '@/li
 import { buildScoreContext, rootKey, scoreName } from '@/lib/search/score';
 import {
     buildNamePredicate,
+    buildTogetherPredicate,
     CATALOG_COLUMNS,
     CATALOG_COLUMNS_NO_ENGLISH,
     encodedPredicateLength,
@@ -26,7 +27,7 @@ import {
     type NameColumns,
 } from '@/lib/search/postgrestSearch';
 import { cardMatchesQuery, prepareCardKeys, prepareQueryKeys } from '@/lib/search/clientMatch';
-import type { Resolution, SearchDictionaryFile } from '@/lib/search/types';
+import { nameSlots, type Resolution, type SearchDictionaryFile } from '@/lib/search/types';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -302,6 +303,24 @@ const POSITIVE: Case[] = [
     { q: 'porygon z ex', dex: [474], phase: 1, mods: ['ex'] },
     // Romaji keeps typo tolerance once the query is long enough to be a name.
     { q: 'koikingu', dex: [129], phase: 2 },
+    // Two Pokémon on one card (Tag Team, LEGEND). The word between them is
+    // never a required fragment: the card prints "&", and "and" as a residual
+    // emptied the search.
+    { q: 'blastoise and piplup', dex: [9, 393], phase: 1 },
+    { q: 'blastoise & piplup gx', dex: [9, 393], phase: 1, mods: ['gx'] },
+    { q: 'pikachu and zekrom', dex: [25, 644], phase: 1 },
+    { q: 'คาเม็กซ์ และ โพจจามะ', dex: [9, 393], phase: 1 },
+    { q: 'คาเม็กซ์โพจจามะ', dex: [9, 393], phase: 1 },
+    { q: 'คาเม็กซ์และโพจจามะGX', dex: [9, 393], phase: 1, mods: ['gx'] },
+    { q: 'คาเม็กซ์กับโพจจามะ', dex: [9, 393], phase: 1 },
+    { q: 'ピカチュウとゼクロム', dex: [25, 644], phase: 1 },
+    // トゲピー starts like the joining word と: the name is tried whole first.
+    { q: 'ピカチュウトゲピー', dex: [25, 175], phase: 1 },
+    { q: 'arceus dialga palkia', dex: [493, 483, 484], phase: 1 },
+    { q: 'blastois and piplap', dex: [9, 393], phase: 2 },
+    { q: 'pikachu and', dex: [25], phase: 1 },
+    // Any other leftover word is still required.
+    { q: 'charizard and friends', dex: [6], phase: 1, residual: ['friend'] },
 ];
 
 const NEGATIVE = [
@@ -314,6 +333,8 @@ const NEGATIVE = [
     'dragon', 'spirit', 'shield', 'giant', 'maiden', 'lizard', 'buggy', 'mummy', 'commander', 'alligator',
     'ブルーアイズ', 'ガーディアン', 'ゴーストリック', 'メガシグナル', 'ゾロ', 'デス', 'マジシャン', 'シャーロット',
     'โทโกะ', 'ฮิคาริ', 'วีการ์ดเอนเนอร์จี้',
+    // Joining words name nothing, alone or between words that are not Pokémon.
+    'and', 'red and blue', 'cynthia and caitlin', 'และ',
 ];
 
 const timings: Array<{ q: string; ms: number }> = [];
@@ -354,6 +375,24 @@ check('resolveForFilter: exact + romaji/European exact only, never a guess', () 
     const r = resolveForFilter(dict, 'alolan vulpix');
     assert.deepEqual(dexes(r), [37]);
     assert.deepEqual(modIds(r), ['alolan']);
+});
+
+check('names typed side by side each keep a slot; readings of one name share one', () => {
+    const slots = (q: string, loose = false) =>
+        nameSlots((loose ? resolveLoose : resolveExact)(dict, analyzeQuery(q))).map((list) => list.map((g) => g.group.dex));
+    assert.deepEqual(slots('blastoise and piplup'), [[9], [393]]);
+    assert.deepEqual(slots('คาเม็กซ์โพจจามะ'), [[9], [393]]);
+    assert.deepEqual(slots('arceus dialga palkia'), [[493], [483], [484]]);
+    assert.deepEqual(slots('blastoise'), [[9]]);
+    assert.deepEqual(slots('pikachu pikachu'), [[25]]);
+    // Two words that are one name stay one slot.
+    assert.deepEqual(slots('mew two'), [[150]]);
+    assert.deepEqual(slots('mr mime'), [[122]]);
+    // Nidoran♀ and Nidoran♂ are two readings of one typed name, not two names.
+    const nidoran = slots('nidoran', true);
+    assert.equal(nidoran.length, 1);
+    assert.deepEqual(nidoran[0].slice().sort((a, b) => a - b), [29, 32]);
+    assert.deepEqual(nameSlots(null), []);
 });
 
 check('Toxapex-style names are never split into species + suffix', () => {
@@ -481,6 +520,60 @@ check('scoring: a leading owner does not demote the name after it to "contains"'
     assert.equal(score('zoroark', { name: 'Zoroark ex', language: 'en' }).band, 4);
     // Only possessive words count as an owner.
     assert.ok(score('zoro', { name: 'Dark Zoroark', language: 'en' }).band < 3);
+});
+
+check('scoring: a card naming every Pokémon typed outranks prints of just one of them', () => {
+    // "blastoise and piplup" listed 30 Blastoise and Piplup prints and never
+    // the Tag Team card. Bands, so no listing or popularity boost undoes it.
+    for (const q of ['blastoise and piplup', 'blastoise piplup', 'blastoise & piplup', 'piplup blastoise', 'คาเม็กซ์ และ โพจจามะ', 'คาเม็กซ์โพจจามะ']) {
+        assert.equal(score(q, { name: 'Blastoise & Piplup GX', language: 'en' }).band, 4, q);
+        assert.equal(score(q, { name: 'คาเม็กซ์ & โพจจามะGX', english_name: 'Blastoise & Piplup-GX', language: 'th' }).band, 4, q);
+        assert.equal(score(q, { name: 'Blastoise', language: 'en' }).band, 3, q);
+        assert.equal(score(q, { name: 'Piplup', language: 'en' }).band, 3, q);
+        assert.equal(score(q, { name: 'ポッチャマ', english_name: 'Piplup', language: 'ja' }).band, 3, q);
+    }
+    // A Thai row with no English name is told by its printed names alone.
+    assert.equal(score('blastoise piplup', { name: 'คาเม็กซ์ & โพจจามะGX', language: 'th' }).band, 4);
+    // With the mechanic typed: the Tag Team, not Blastoise-GX.
+    assert.equal(score('blastoise and piplup gx', { name: 'Blastoise & Piplup GX', language: 'en' }).band, 4);
+    assert.equal(score('blastoise and piplup gx', { name: 'Blastoise-GX', language: 'en' }).band, 3);
+    // A mistyped mechanic still finds the card that names both.
+    const wrongMechanic = score('pikachu zekrom ex', { name: 'Pikachu & Zekrom-GX', language: 'en' });
+    assert.equal(wrongMechanic.band, 4);
+    assert.equal(score('pikachu zekrom ex', { name: 'Pikachu ex', language: 'en' }).band, 3);
+    assert.ok(wrongMechanic.score < score('pikachu zekrom gx', { name: 'Pikachu & Zekrom-GX', language: 'en' }).score);
+    // Mew is inside Mewtwo: only the card with both names both.
+    assert.equal(score('mewtwo and mew', { name: 'Mewtwo & Mew-GX', language: 'en' }).band, 4);
+    assert.equal(score('mew mewtwo', { name: 'Mewtwo & Mew-GX', language: 'en' }).band, 4);
+    assert.equal(score('mewtwo and mew', { name: 'Mewtwo-GX', language: 'en' }).band, 3);
+    assert.equal(score('mewtwo and mew', { name: 'Mew ex', language: 'en' }).band, 3);
+    // Exactly the Pokémon typed, above a card with a third one on it.
+    const pair = score('dialga palkia', { name: 'Dialga & Palkia LEGEND', language: 'en' });
+    const trio = score('dialga palkia', { name: 'Arceus & Dialga & Palkia-GX', language: 'en' });
+    assert.equal(pair.band, 4);
+    assert.equal(trio.band, 4);
+    assert.ok(pair.score > trio.score);
+    assert.equal(score('arceus dialga palkia', { name: 'Arceus & Dialga & Palkia-GX', language: 'en' }).band, 4);
+    // Two of the three typed is only the weak "contains a name" credit.
+    assert.equal(score('arceus dialga palkia', { name: 'Dialga & Palkia LEGEND', language: 'en' }).band, 1);
+    // Two misspelt names (phase 2), discounted like every guess.
+    const guessed = score('blastois and piplap', { name: 'Blastoise & Piplup GX', language: 'en' }, true);
+    assert.equal(guessed.band, 4);
+    assert.ok(guessed.score < 100);
+    // One name typed: nothing changes.
+    assert.equal(score('blastoise', { name: 'Blastoise', language: 'en' }).band, 4);
+    assert.equal(score('blastoise', { name: 'Blastoise & Piplup GX', language: 'en' }).band, 3);
+    assert.equal(score('pikachu and', { name: 'Pikachu', language: 'en' }).band, 4);
+});
+
+check('scoring: a joining word is not required of a name printed with "&"', () => {
+    assert.equal(score('red and blue', { name: 'Red & Blue', language: 'en' }).band, 2);
+    assert.equal(score('cynthia and caitlin', { name: 'Cynthia & Caitlin', language: 'en' }).band, 2);
+    // A name that does print the word still leads.
+    const printed = score('fire and ice', { name: 'Sword of Fire and Ice', language: 'en' });
+    const loose = score('fire and ice', { name: 'Fire Dice', language: 'en' });
+    assert.equal(printed.band, 2);
+    assert.ok(printed.score > loose.score);
 });
 
 // ── predicate builder ──
@@ -728,6 +821,48 @@ check('predicate: residuals, owners, full-width spellings, hiragana', () => {
     assert.ok(h.includes('name.ilike.%こいきんぐ%') && h.includes('name.ilike.%コイキング%'), h);
 });
 
+check('predicate: two names typed together get an every-name filter of their own', () => {
+    const together = (q: string, cols: NameColumns = CATALOG_COLUMNS) =>
+        buildTogetherPredicate({ resolution: resolveExact(dict, analyzeQuery(q)), cols });
+    const matches = (q: string, row: Row, cols: NameColumns = CATALOG_COLUMNS) => {
+        const p = together(q, cols);
+        assert.ok(p, `no every-name filter for "${q}"`);
+        validatePredicate(p!);
+        return evalNode(parsePredicate(p!), { english_name: null, game: 'pokemon', ...row });
+    };
+    for (const q of ['blastoise and piplup', 'blastoise piplup gx', 'คาเม็กซ์โพจจามะ']) {
+        assert.ok(matches(q, { name: 'Blastoise & Piplup GX' }), q);
+        assert.ok(matches(q, { name: 'คาเม็กซ์ & โพจจามะGX', english_name: 'Blastoise & Piplup-GX' }), q);
+        assert.ok(matches(q, { name: 'คาเม็กซ์ & โพจจามะGX' }), q);
+        assert.ok(!matches(q, { name: 'Blastoise' }), q);
+        assert.ok(!matches(q, { name: 'Piplup V' }), q);
+        assert.ok(!matches(q, { name: 'Blastoise & Piplup GX', game: 'onepiece' }), q);
+    }
+    // No mechanic leg: ranking handles a mistyped one.
+    assert.ok(matches('pikachu zekrom ex', { name: 'Pikachu & Zekrom-GX' }));
+    assert.ok(matches('arceus dialga palkia', { name: 'Arceus & Dialga & Palkia-GX' }));
+    assert.ok(!matches('arceus dialga palkia', { name: 'Dialga & Palkia LEGEND' }));
+    for (const [, cols] of ALL_COLS) {
+        assert.ok(matches('blastoise and piplup', { name: 'Blastoise & Piplup GX' }, cols));
+        assert.ok(encodedPredicateLength(together('pikachu charizard magikarp', cols)!) <= PREDICATE_MAX_ENCODED);
+    }
+    // One name, or none: no extra fetch.
+    assert.equal(together('blastoise'), null);
+    assert.equal(together('mew two'), null);
+    assert.equal(together('red and blue'), null);
+    assert.equal(buildTogetherPredicate({ resolution: null, cols: CATALOG_COLUMNS }), null);
+
+    // The main filter no longer requires the joining word either.
+    const main = predFor('blastoise and piplup', CATALOG_COLUMNS)!;
+    assert.ok(!main.includes('%and%'), main);
+    assert.ok(evalNode(parsePredicate(main), { name: 'Blastoise & Piplup GX', game: 'pokemon' }), main);
+    assert.ok(evalNode(parsePredicate(predFor('blastoise and piplup', LISTING_COLUMNS)!), { name: 'Blastoise & Piplup GX', game: 'pokemon' }));
+    // Nor does the every-word filter for names the dictionary does not know.
+    const trainers = predFor('red and blue', CATALOG_COLUMNS)!;
+    assert.ok(evalNode(parsePredicate(trainers), { name: 'Red & Blue' }), trainers);
+    assert.ok(!evalNode(parsePredicate(trainers), { name: 'Red Card' }), trainers);
+});
+
 check('predicate: phase-2 group-only and nothing-searchable', () => {
     const a = analyzeQuery('koiking');
     const res = resolveLoose(dict, a);
@@ -785,6 +920,11 @@ check('predicate invariants hold over every dictionary term + random punctuation
             const literals = v === a.nameText ? [v, ''] : [a.nameText, v, ''];
             for (const res of resolutions) {
                 for (const [, cols] of ALL_COLS) {
+                    const every = buildTogetherPredicate({ resolution: res, cols });
+                    if (every !== null) {
+                        count++;
+                        validatePredicate(every);
+                    }
                     for (const literal of literals) {
                         for (const includeResidual of res && res.residual.length > 0 ? [true, false] : [true]) {
                             const fullLiteral = literal === a.nameText ? a.fullText : undefined;
@@ -830,6 +970,10 @@ check('client filter: literal, words, species in any language, modifiers', () =>
     // A half-typed Thai name (Kingambit, โดโดเกซัน) must not show every Doduo (โดโด).
     assert.ok(filter('โดโดเกซั', { name: 'โดโดเกซัน' }));
     assert.ok(!filter('โดโดเกซั', { name: 'โดโด' }));
+    // A joining word is not required: the card prints "&".
+    assert.ok(filter('blastoise and piplup', { name: 'Blastoise & Piplup GX' }));
+    assert.ok(filter('คาเม็กซ์ และ โพจจามะ', { name: 'คาเม็กซ์ & โพจจามะGX', thaiName: 'Blastoise & Piplup-GX' }));
+    assert.ok(!filter('blastoise and piplup', { name: 'Charizard' }));
 });
 
 check('client filter: numbers never match across the slash', () => {

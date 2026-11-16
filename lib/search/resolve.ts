@@ -25,7 +25,7 @@
  */
 
 import { clipQuery, foldKey, looseKey, scriptOf, tokenize, widthFold } from './normalize';
-import { LANGUAGE_TOKENS, MODIFIERS, RARITY_TOKENS, STOPWORDS, type Modifier } from './modifiers';
+import { JOINING_WORDS, LANGUAGE_TOKENS, MODIFIERS, RARITY_TOKENS, STOPWORDS, type Modifier } from './modifiers';
 import type { CatalogLanguage, GroupMatch, MatchKind, ModifierMatch, QueryAnalysis, Resolution } from './types';
 import { getFuzzyIndex, spellingForKey, type FuzzyIndex, type FuzzyScript, type SearchDictionary } from './dictionary';
 
@@ -47,6 +47,8 @@ interface Tables {
     language: Map<string, CatalogLanguage>;
     rarity: Set<string>;
     stop: Set<string>;
+    /** Fold keys of the words typed between two names ("and", และ). */
+    join: Set<string>;
 }
 
 let tables: Tables | null = null;
@@ -103,7 +105,8 @@ function getTables(): Tables {
     }
     const rarity = new Set(RARITY_TOKENS.map(foldKey).filter(Boolean));
     const stop = new Set(Array.from(STOPWORDS, foldKey).filter(Boolean));
-    tables = { standalone, prefixes, suffixes, language, rarity, stop };
+    const join = new Set(Array.from(JOINING_WORDS, foldKey).filter(Boolean));
+    tables = { standalone, prefixes, suffixes, language, rarity, stop, join };
     return tables;
 }
 
@@ -546,8 +549,17 @@ function segment(dict: SearchDictionary, a: QueryAnalysis, mode: Mode): Resoluti
     const groups: GroupMatch[] = [];
     const modifiers: ModifierMatch[] = [];
     const residual: string[] = [];
+    // One call per typed name: its readings share a slot, and the next name
+    // gets the next one ("blastoise piplup" is two slots, "nidoran" one).
+    let slot = 0;
     const addGroups = (hits: GroupMatch[]) => {
-        for (const h of hits) if (!groups.some((g) => g.group.idx === h.group.idx)) groups.push(h);
+        let added = false;
+        for (const h of hits) {
+            if (groups.some((g) => g.group.idx === h.group.idx)) continue;
+            groups.push({ ...h, slot });
+            added = true;
+        }
+        if (added) slot++;
     };
     const addMod = (mod: Modifier, matched: string) => {
         if (!modifiers.some((m) => m.modifier.id === mod.id)) modifiers.push({ modifier: mod, matched });
@@ -570,7 +582,10 @@ function segment(dict: SearchDictionary, a: QueryAnalysis, mode: Mode): Resoluti
         let state: TokState = 'free';
         if (!key || t.stop.has(key)) state = 'stop';
         else if (/^\d+$/.test(key)) state = 'num';
-        else if (CONNECTORS.has(key)) state = 'conn';
+        // A joining word is never part of a name, never a required fragment
+        // and never a reason to distrust a guess: "blastoise and piplup"
+        // required "and" of rows printed "Blastoise & Piplup-GX".
+        else if (CONNECTORS.has(key) || t.join.has(key)) state = 'conn';
         return { raw, key, state };
     });
     const n = toks.length;
@@ -755,7 +770,21 @@ function segment(dict: SearchDictionary, a: QueryAnalysis, mode: Mode): Resoluti
             // of any name, and ANDing it in would only empty the results.
             else if (!t.stop.has(restKey)) leftover = rest;
         }
+        // A second name glued on, with or without the joining word:
+        // คาเม็กซ์โพจจามะ, คาเม็กซ์และโพจจามะ (the card prints "คาเม็กซ์ &
+        // โพจจามะGX"). Only when the leftover is exactly a name; it is tried
+        // whole first, so a name that starts like a joining word (トゲピー
+        // after と) is never cut.
+        let second: GroupMatch[] | null = null;
         if (leftover !== null) {
+            const leftKey = foldKey(leftover);
+            second = r.span(leftKey);
+            for (const j of t.join) {
+                if (second) break;
+                if (leftKey.length > j.length && leftKey.startsWith(j)) second = r.span(leftKey.slice(j.length));
+            }
+        }
+        if (leftover !== null && !second) {
             // Katakana compounds from other games start with species names far
             // more often than Japanese Pokémon queries glue on a free word
             // (ブルーアイズ is Blue-Eyes, not Snubbull + アイズ; ガーディアン,
@@ -772,8 +801,9 @@ function segment(dict: SearchDictionary, a: QueryAnalysis, mode: Mode): Resoluti
             if (THAI_MID_SYLLABLE.test(leftover)) continue;
         }
         addGroups(head.hits);
+        if (second) addGroups(second);
         for (const m of mods) addMod(m.mod, m.matched);
-        if (leftover !== null) addResidual(leftover);
+        if (leftover !== null && !second) addResidual(leftover);
         x.state = 'used';
     }
 

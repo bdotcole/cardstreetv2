@@ -14,6 +14,7 @@ import { getLoadedSearchDictionary, loadSearchDictionary, type SearchDictionary 
 import { analyzeQuery, isStopword, resolveExact, resolveLoose } from '@/lib/search/resolve';
 import {
     buildNamePredicate,
+    buildTogetherPredicate,
     CATALOG_COLUMNS,
     CATALOG_COLUMNS_NO_ENGLISH,
     type NameColumns,
@@ -475,22 +476,35 @@ export const pokemonService = {
                         if (resolution.groups.length === 0) resolution = null;
                     }
                 }
+                const cols = dbLang === 'en' ? CATALOG_COLUMNS_NO_ENGLISH : CATALOG_COLUMNS;
                 const pred = buildNamePredicate({
                     literal: analysis.nameText,
                     fullLiteral: analysis.fullText,
                     resolution,
-                    cols: dbLang === 'en' ? CATALOG_COLUMNS_NO_ENGLISH : CATALOG_COLUMNS,
+                    cols,
                 });
                 if (pred) {
-                    let q = supabase
-                        .from('pokemon_cards')
-                        .select(baseSelect)
-                        .or(pred)
-                        .eq('game', game);
-                    if (dbLang) q = q.eq('language', dbLang);
                     // Wider than the 5 shown: species legs match every print,
                     // in arbitrary order, and ranking needs the exact ones.
-                    ({ data: rows } = await q.limit(20));
+                    const run = (namePred: string) => {
+                        let q = supabase
+                            .from('pokemon_cards')
+                            .select(baseSelect)
+                            .or(namePred)
+                            .eq('game', game);
+                        if (dbLang) q = q.eq('language', dbLang);
+                        return q.limit(20);
+                    };
+                    // Two Pokémon typed together: the cards printing both come
+                    // in a fetch of their own, or 20 arbitrary single prints
+                    // crowd them out (see searchCards).
+                    const togetherPred = buildTogetherPredicate({ resolution, cols });
+                    const [main, together] = await Promise.all([run(pred), togetherPred ? run(togetherPred) : null]);
+                    const merged = new Map<string, any>();
+                    for (const r of [...((together?.data || []) as any[]), ...((main.data || []) as any[])]) {
+                        if (r?.id && !merged.has(r.id)) merged.set(r.id, r);
+                    }
+                    rows = Array.from(merged.values());
                     nameCtx = buildScoreContext(analysis, resolution);
                 }
             }
@@ -725,6 +739,16 @@ export const pokemonService = {
                     })
                     : null;
 
+            // Cards that print every Pokémon the query named ("Blastoise &
+            // Piplup-GX" for "blastoise piplup"), fetched on their own: in the
+            // species OR above they are a handful among hundreds of single
+            // prints, and the unordered LIMIT dropped them. Resolves to no
+            // rows, without a request, unless two or more names resolved.
+            const fetchTogether = async (res: Resolution | null | undefined, narrow: boolean): Promise<any[]> => {
+                if (!buildTogetherPredicate({ resolution: res, cols: CATALOG_COLUMNS })) return [];
+                return (await fetchScopes(cols => buildTogetherPredicate({ resolution: res, cols }), narrow)).rows;
+            };
+
             // "162/130": every print numbered 162 in a set whose printed total
             // is 130, in every language. A bare number would dump every #162.
             const fetchSetTotal = async (numerator: string, total: number): Promise<Fetched> => {
@@ -772,12 +796,13 @@ export const pokemonService = {
                 return (data || []) as any[];
             };
 
-            const [first, exactSetFetch, partialRows] = await Promise.all([
+            const [first, exactSetFetch, partialRows, firstTogether] = await Promise.all([
                 totalMatch
                     ? fetchSetTotal(totalMatch[1], parseInt(totalMatch[2], 10))
                     : fetchScopes(predFor(primary), true),
                 exactSetSearch ? fetchScopes(predFor(exactSetSearch), false, exactSetGame) : Promise.resolve(null),
                 partialIds.length > 0 ? fetchPartialSets() : Promise.resolve([] as any[]),
+                totalMatch ? Promise.resolve([] as any[]) : fetchTogether(primary?.res, true),
             ]);
             if (signal?.aborted) return [];
 
@@ -797,6 +822,7 @@ export const pokemonService = {
             }
 
             let rows = firstPass.rows;
+            let togetherRows = firstTogether;
             let current: NameSearch | null = primary;
             if (rows.length === 0 && narrowed && !setMatch.exact && !totalMatch) {
                 // A narrowed pass can zero out on a false positive: a matched "set"
@@ -807,8 +833,13 @@ export const pokemonService = {
                 // never hits a card name.
                 const retryText = useNumber && parsed.name.length >= 2 ? parsed.name : trimmedQuery;
                 current = primary && retryText === primaryName ? primary : prepare(retryText);
-                rows = (await fetchScopes(predFor(current), false)).rows;
+                const [retry, retryTogether] = await Promise.all([
+                    fetchScopes(predFor(current), false),
+                    fetchTogether(current.res, false),
+                ]);
                 if (signal?.aborted) return [];
+                rows = retry.rows;
+                togetherRows = retryTogether;
             }
             if (rows.length === 0 && current?.res && !setMatch.exact) {
                 // Species found but nothing printed: leftover words are often not
@@ -832,6 +863,7 @@ export const pokemonService = {
                 for (const r of list || []) if (r?.id && !pool.has(r.id)) pool.set(r.id, r);
             };
             addRows(rows);
+            addRows(togetherRows);
             addRows(exactSetFetch?.rows);
             addRows(partialRows);
 
@@ -895,10 +927,12 @@ export const pokemonService = {
                             return Array.isArray(data) ? (data as any[]) : [];
                         })()
                         : Promise.resolve([] as any[]);
-                    const [groupRows, rpcRows] = await Promise.all([groupTask, rpcTask]);
+                    // Two misspelt names side by side ("blastois piplap").
+                    const [groupRows, rpcRows, looseTogether] = await Promise.all([groupTask, rpcTask, fetchTogether(res2, narrowP2)]);
                     if (signal?.aborted) return [];
 
                     addRows(groupRows);
+                    addRows(looseTogether);
                     // The RPC has no language or number parameter (a PostgREST
                     // filter would apply after its LIMIT), so narrow here.
                     let fuzzyRows = rpcRows.filter(r =>
