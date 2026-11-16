@@ -79,11 +79,33 @@ export default function DesktopSell() {
     const [unitsDraft, setUnitsDraft] = useState(1);
     const [savingUnits, setSavingUnits] = useState(false);
 
+    // Bookkeeping for cancelListing, which takes a line off the list before
+    // its cancel has landed. A refetch that read the table before that write
+    // landed would put the line back until the next refetch, so a refetch is
+    // thrown away when a cancel is still in flight, or when one started or
+    // settled after the refetch began. (useUserCollections.removeListedGroup
+    // is the same idea for the mobile Vault.)
+    const cancelsInFlightRef = useRef(0);
+    const listEpochRef = useRef(0);
+    const refetchOwedRef = useRef(false);
+
     const refreshMyListings = useCallback(() => {
-        // One row per copy in the DB (createListing's quantity); one line per
-        // group here, with the copy count, like the marketplace grid. Price
-        // and cancel act on the whole group through siblingIds.
-        marketplaceService.getMyListings().then((rows) => setMyListings(groupSiblingListings(rows)));
+        const read = () => {
+            const epochAtStart = listEpochRef.current;
+            // One row per copy in the DB (createListing's quantity); one line
+            // per group here, with the copy count, like the marketplace grid.
+            // Price and cancel act on the whole group through siblingIds.
+            marketplaceService.getMyListings().then((rows) => {
+                // Null: the list could not be read. Keep what is on screen.
+                if (!rows) return;
+                // Thrown away, but not lost: whoever asked still gets a
+                // refetch, from the cancel when it settles or by reading again.
+                if (cancelsInFlightRef.current > 0) { refetchOwedRef.current = true; return; }
+                if (epochAtStart !== listEpochRef.current) { read(); return; }
+                setMyListings(groupSiblingListings(rows));
+            });
+        };
+        read();
     }, []);
 
     useEffect(() => {
@@ -216,14 +238,42 @@ export default function DesktopSell() {
         }
     };
 
+    // The line leaves the list the moment the seller confirms; the cancel runs
+    // behind it. It used to stay, with nothing to show the click had
+    // registered, until the cancel and then a full refetch had both finished.
     const cancelListing = async (listing: MarketplaceListing) => {
         if (!window.confirm(t('desktop.sell.cancelConfirm'))) return;
-        const ok = await marketplaceService.cancelListingsByIds(listing.siblingIds ?? [listing.id]);
+        const position = myListings.findIndex((l) => l.id === listing.id);
+        cancelsInFlightRef.current++;
+        listEpochRef.current++;
+        setMyListings((prev) => prev.filter((l) => l.id !== listing.id));
+
+        const ok = await marketplaceService
+            .cancelListingsByIds(listing.siblingIds ?? [listing.id])
+            .catch(() => false);
+        cancelsInFlightRef.current--;
+        listEpochRef.current++;
+
         if (ok) {
+            refetchOwedRef.current = true;
             showToast(t('desktop.sell.toastCancelled'), 'success');
-            refreshMyListings();
         } else {
+            // Put the line back where it was. A refetch could not be relied
+            // on for that: the usual reason a cancel fails is no connection.
+            setMyListings((prev) => {
+                if (prev.some((l) => l.id === listing.id)) return prev;
+                const at = position < 0 ? prev.length : Math.min(position, prev.length);
+                return [...prev.slice(0, at), listing, ...prev.slice(at)];
+            });
             showToast(t('desktop.sell.toastCancelFailed'), 'error');
+        }
+
+        // One refetch once the last cancel has settled (an earlier one would
+        // be thrown away by the guard in refreshMyListings), and only if a
+        // cancel landed or a refetch was thrown away while this one ran.
+        if (cancelsInFlightRef.current === 0 && refetchOwedRef.current) {
+            refetchOwedRef.current = false;
+            refreshMyListings();
         }
     };
 

@@ -280,8 +280,17 @@ export function useUserCollections(): UseUserCollectionsReturn {
                 };
             });
 
-            // Stale against a removal the screen already shows (see the refs above).
-            if (writesInFlightRef.current > 0 || epochAtStart !== localEpochRef.current) return;
+            // Stale against a removal the screen already shows (see the refs
+            // above). Thrown away, but not lost: whoever asked for this reload
+            // still gets one, from the write when it settles or by reading again.
+            if (writesInFlightRef.current > 0) {
+                reloadOwedRef.current = true;
+                return;
+            }
+            if (epochAtStart !== localEpochRef.current) {
+                await loadCollections();
+                return;
+            }
 
             setCollections(collectionsWithItems);
             setOrphanListings(orphans);
@@ -588,7 +597,8 @@ export function useUserCollections(): UseUserCollectionsReturn {
             // Quiet (no isLoading): the screen already shows the result, this
             // only settles what a local edit cannot know, such as another
             // condition's rows now matching the vault item. Only after a
-            // write that landed; a failed one changed nothing to re-read.
+            // write that landed (a failed one changed nothing to re-read) or
+            // when a reload was thrown away while this one was in flight.
             if (writesInFlightRef.current === 0 && reloadOwedRef.current) {
                 reloadOwedRef.current = false;
                 void loadCollections();

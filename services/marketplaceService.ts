@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { authCheckUnavailable } from '@/lib/supabase/authCheck';
 import { Card } from '@/types';
 import { normalizeCard } from '@/lib/utils/normalizeCard';
 import { loadSearchDictionary, type SearchDictionary } from '@/lib/search/dictionary';
@@ -743,14 +744,18 @@ export const marketplaceService = {
     },
 
     /**
-     * Fetch the signed-in user's own active listings, newest first. Used by
+     * Fetch the signed-in user's own live listings, newest first. Used by
      * the desktop Sell page.
+     *
+     * Null when the list could not be read (no connection, a failed query):
+     * the caller keeps what it is showing. An empty array there would read as
+     * "you have no listings" and blank the page. Signed out is an empty list.
      */
-    async getMyListings(): Promise<MarketplaceListing[]> {
+    async getMyListings(): Promise<MarketplaceListing[] | null> {
         const supabase = createClient();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return [];
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (!user) return authCheckUnavailable(authError) ? null : [];
 
             const { data, error } = await supabase
                 .from('listings')
@@ -783,7 +788,7 @@ export const marketplaceService = {
             return withSellers;
         } catch (error) {
             console.error('Error fetching my listings:', error);
-            return [];
+            return null;
         }
     },
 
