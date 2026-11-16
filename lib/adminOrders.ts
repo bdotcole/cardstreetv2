@@ -171,7 +171,7 @@ export const OPEN_ORDER_STATUSES = ['paid', 'processing', 'label_generated', 'sh
 
 const HOUR = 3600e3
 const DAY = 24 * HOUR
-/** A paid order should have its label within a day; the safety-net cron mints one at 24h. */
+/** A paid order should be on its way (courier booked or sent from a counter) within a day; the first ship reminder goes at 24h. */
 const NO_LABEL_AFTER_MS = 24 * HOUR
 /** A label with no Flash scan after two days is the parcel the ship reminders chase. */
 const UNSCANNED_AFTER_MS = 48 * HOUR

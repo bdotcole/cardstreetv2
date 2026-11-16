@@ -3,25 +3,28 @@
 import React from 'react';
 import BodyPortal from './BodyPortal';
 import { useTranslation } from '@/lib/hooks/useTranslation';
-import { handoffOf, pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type HandoffFields, type ShipMethod } from '@/lib/orderGroups';
+import { handoffOf, pickupBookedAt, isPickupCancelled, PICKUP_REBOOK_AFTER_MS, type HandoffFields } from '@/lib/orderGroups';
 import { CARRIERS, isByHand } from '@/lib/carriers';
 
 /**
- * How a seller's parcel reaches Flash, for both shells (mobile Pending
- * Shipments in components/Profile.tsx, desktop "To ship" in
+ * How a seller's parcel leaves, for both shells (mobile Pending Shipments in
+ * components/Profile.tsx, desktop "To ship" in
  * components/desktop/DesktopOrders.tsx).
  *
- * Every label used to book a courier pickup at the seller's profile address
- * without saying so. Sellers were out, or had not packed yet, and Flash
- * cancelled 6 of 7 such pickups (2026-10). Now the seller chooses when they
- * create the label (ShipMethodSheet), and the parcel card says what was
- * arranged and lets them book a courier later (ParcelHandoffNote).
+ * One question, two answers (2026-11-16). A Flash courier picks it up: the
+ * label is minted and the courier booked in one tap (CourierSheet). Or the
+ * seller sends it themselves from any counter and enters the number
+ * (SendMyselfSheet). There used to be a third: print our Flash label and take
+ * it to a branch. Counters refused those labels (Flash Home shops, phone-screen
+ * QR codes, branches that could not scan them): of 17 such parcels since
+ * 2026-10-01 five arrived, four were cancelled and eight sat unscanned, while
+ * 20 of 21 parcels with a booked courier moved. A counter that makes its own
+ * label always takes the parcel, so "send it yourself" replaces it.
  *
- * A parcel can also leave without any Flash scan of our label (handed to
- * Flash staff who key it in themselves, another courier, by hand). The order
- * would then sit at label_generated forever, so the seller says so in
- * ShippedElsewhereSheet (POST /api/orders/label/handoff) and HandoffSummary
- * shows what they told us.
+ * "Send it yourself" works before a label exists (lib/parcels shipSelf) and
+ * after one was made and never used (handOffParcel: a cancelled courier, a
+ * legacy drop-off label); the seller sees one action either way, always with
+ * the buyer's details, and HandoffSummary shows what they told us.
  */
 
 export interface PickupInfo {
@@ -30,37 +33,71 @@ export interface PickupInfo {
     phone: string | null;
 }
 
-// Flash's own locator lists official branches only. A maps search for
-// "Flash Express" returns Flash Home franchise shops too, and those have
-// refused parcels carrying our API labels (2026-11).
-const FLASH_BRANCH_SEARCH_URL = 'https://www.flashexpress.co.th/fle/location';
-
-async function openFlashBranchSearch() {
-    try {
-        const { Capacitor } = await import('@capacitor/core');
-        if (Capacitor.isNativePlatform()) {
-            const { Browser } = await import('@capacitor/browser');
-            await Browser.open({ url: FLASH_BRANCH_SEARCH_URL });
-            return;
-        }
-    } catch {
-        // Not in the native shell; fall through to a normal tab.
-    }
-    window.open(FLASH_BRANCH_SEARCH_URL, '_blank', 'noopener');
+/** The buyer's details a seller copies onto the counter's form. */
+export interface RecipientInfo {
+    name: string | null;
+    phone: string | null;
+    address: string | null;
 }
 
 /**
- * Asked when the seller creates a label ('create': drop-off or pickup), or
- * when they book a courier for a parcel that already has one ('pickup').
- * Drop-off is one tap; a pickup shows the address the courier will go to and
- * needs its own confirm, because it sends a person to the seller's door.
+ * The two answers on a parcel waiting to ship, as tiles with a line each, so
+ * the choice reads without opening anything. Mobile card only; desktop puts
+ * the same two actions in its row buttons.
  */
-export function ShipMethodSheet({ mode, pickup, onChoose, onClose, onEditAddress }: {
+export function ShipChoices({ busy, onCourier, onSendMyself }: {
+    busy: boolean;
+    onCourier: () => void;
+    onSendMyself: () => void;
+}) {
+    const { t } = useTranslation();
+    const tile = 'w-full text-left rounded-xl border p-3 flex gap-3 items-start transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+    return (
+        <div className="space-y-2">
+            <p className="text-[11px] font-bold text-slate-400">{t('parcel.chooseHeading')}</p>
+            <button
+                onClick={onCourier}
+                disabled={busy}
+                className={`${tile} border-brand-green/30 bg-brand-green/10 hover:bg-brand-green/20`}
+            >
+                <i className="fa-solid fa-truck text-brand-green mt-0.5 w-4 text-center"></i>
+                <span className="min-w-0">
+                    <span className="block text-sm font-bold text-brand-green">
+                        {busy ? t('parcel.creating') : t('parcel.courierChoice')}
+                    </span>
+                    <span className="block text-xs text-slate-300 leading-relaxed mt-0.5">{t('parcel.courierChoiceBody')}</span>
+                </span>
+            </button>
+            <button
+                onClick={onSendMyself}
+                disabled={busy}
+                className={`${tile} border-white/10 bg-white/5 hover:bg-white/10`}
+            >
+                <i className="fa-solid fa-store text-slate-300 mt-0.5 w-4 text-center"></i>
+                <span className="min-w-0">
+                    <span className="block text-sm font-bold text-white">{t('parcel.sendMyself')}</span>
+                    <span className="block text-xs text-slate-400 leading-relaxed mt-0.5">{t('parcel.sendMyselfBody')}</span>
+                </span>
+            </button>
+        </div>
+    );
+}
+
+/**
+ * Booking a Flash courier: for a new parcel ('create': the label is minted and
+ * the courier booked in one request) or for a parcel that already has its
+ * label ('pickup': book again after a cancelled or missed courier). It shows
+ * the address the courier goes to and needs its own confirm, because it sends
+ * a person to the seller's door. `onSendMyself` is the way out for a seller
+ * with no printer, or who will not be home.
+ */
+export function CourierSheet({ mode, pickup, onConfirm, onClose, onEditAddress, onSendMyself }: {
     mode: 'create' | 'pickup';
     pickup: PickupInfo | null;
-    onChoose: (method: ShipMethod) => void;
+    onConfirm: () => void;
     onClose: () => void;
     onEditAddress?: () => void;
+    onSendMyself?: () => void;
 }) {
     const { t } = useTranslation();
     const address = pickup?.address || null;
@@ -73,68 +110,52 @@ export function ShipMethodSheet({ mode, pickup, onChoose, onClose, onEditAddress
             onClick={onClose}
         >
             <div
-                className="w-full max-w-sm max-h-full overflow-y-auto glass rounded-3xl p-6 border border-white/10 relative bg-slate-900"
+                className="w-full max-w-sm max-h-full overflow-y-auto glass rounded-3xl p-6 border border-white/10 relative bg-slate-900 space-y-4"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
-                aria-labelledby="ship-method-title"
+                aria-labelledby="courier-sheet-title"
             >
                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-green to-brand-cyan"></div>
-                <div className="flex justify-between items-start gap-3 mb-2">
-                    <h3 id="ship-method-title" className="text-lg font-black text-white leading-tight">
-                        {mode === 'create' ? t('parcel.methodTitle') : t('parcel.bookPickup')}
+                <div className="flex justify-between items-start gap-3">
+                    <h3 id="courier-sheet-title" className="text-lg font-black text-white leading-tight">
+                        {mode === 'create' ? t('parcel.courierTitle') : t('parcel.bookPickup')}
                     </h3>
                     <button onClick={onClose} aria-label={t('orderActions.cancel')} className="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
                         <i className="fa-solid fa-xmark text-slate-400"></i>
                     </button>
                 </div>
-                {mode === 'create' && (
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">{t('parcel.methodIntro')}</p>
-                )}
+                <p className="text-slate-300 text-sm leading-relaxed">{t('parcel.pickupBody')}</p>
 
-                <div className="space-y-3">
-                    {mode === 'create' && (
-                        <button
-                            onClick={() => onChoose('dropoff')}
-                            className="w-full text-left rounded-2xl border border-brand-green/30 bg-brand-green/10 hover:bg-brand-green/20 p-4 transition-colors"
-                        >
-                            <span className="flex items-center gap-2 text-brand-green font-bold text-sm">
-                                <i className="fa-solid fa-store"></i>
-                                {t('parcel.dropoffTitle')}
-                            </span>
-                            <span className="block text-slate-300 text-xs leading-relaxed mt-1.5">{t('parcel.dropoffBody')}</span>
+                <div className="rounded-xl bg-black/30 border border-white/5 px-3 py-2.5 space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('parcel.pickupAddress')}</p>
+                    <p className="text-white text-sm leading-relaxed break-words">{address || t('parcel.noPickupAddress')}</p>
+                    {address && pickup?.phone && (
+                        <p className="text-slate-400 text-xs">{t('parcel.pickupPhone')}: <span className="text-slate-200">{pickup.phone}</span></p>
+                    )}
+                    {onEditAddress && (
+                        <button onClick={onEditAddress} className="text-brand-cyan text-xs font-bold underline underline-offset-2">
+                            {t('parcel.editAddress')}
                         </button>
                     )}
-
-                    <div className="rounded-2xl border border-brand-cyan/30 bg-brand-cyan/5 p-4 space-y-3">
-                        <div>
-                            <p className="flex items-center gap-2 text-brand-cyan font-bold text-sm">
-                                <i className="fa-solid fa-truck"></i>
-                                {t('parcel.pickupTitle')}
-                            </p>
-                            <p className="text-slate-300 text-xs leading-relaxed mt-1.5">{t('parcel.pickupBody')}</p>
-                        </div>
-                        <div className="rounded-xl bg-black/30 border border-white/5 px-3 py-2.5 space-y-1">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('parcel.pickupAddress')}</p>
-                            <p className="text-white text-xs leading-relaxed break-words">{address || t('parcel.noPickupAddress')}</p>
-                            {address && pickup?.phone && (
-                                <p className="text-slate-400 text-xs">{t('parcel.pickupPhone')}: <span className="text-slate-200">{pickup.phone}</span></p>
-                            )}
-                            {onEditAddress && (
-                                <button onClick={onEditAddress} className="text-brand-cyan text-xs font-bold underline underline-offset-2">
-                                    {t('parcel.editAddress')}
-                                </button>
-                            )}
-                        </div>
-                        <button
-                            onClick={() => onChoose('pickup')}
-                            disabled={!address}
-                            className="w-full h-11 rounded-xl bg-brand-cyan text-black font-bold text-sm hover:bg-brand-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                            {t('parcel.bookPickupConfirm')}
-                        </button>
-                    </div>
                 </div>
+
+                <button
+                    onClick={onConfirm}
+                    disabled={!address}
+                    className="w-full h-11 rounded-xl bg-brand-cyan text-black font-bold text-sm hover:bg-brand-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {t('parcel.bookPickupConfirm')}
+                </button>
+
+                {onSendMyself && (
+                    <button
+                        onClick={onSendMyself}
+                        className="w-full text-center text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
+                    >
+                        {t('parcel.courierSendMyselfInstead')}
+                    </button>
+                )}
             </div>
         </div>
         </BodyPortal>
@@ -147,19 +168,20 @@ interface HandoffLabel {
 }
 
 /**
- * The line under a labelled parcel Flash has not scanned yet: what was
- * arranged, and the way out when it did not happen. A pickup Flash cancelled
+ * The note under a labelled parcel Flash has not scanned yet: whether a
+ * courier is coming, and the two ways forward. A pickup Flash cancelled
  * (found by the reconcile-pickups cron, pickup_status 'cancelled') says so
  * plainly and offers Book again at once; while a booking still reads
  * 'scheduled', the seller may book again after PICKUP_REBOOK_AFTER_MS
- * (lib/parcels bookPickup enforces the same window).
+ * (lib/parcels bookPickup enforces the same window). A label with no courier
+ * (the drop-off labels made before 2026-11-16) gets the same two choices.
  */
-export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhere }: {
+export function ParcelHandoffNote({ labels, busy, onBookPickup, onSendMyself }: {
     labels: (HandoffLabel | null | undefined)[];
     busy: boolean;
     onBookPickup: () => void;
-    /** The parcel already left without a Flash scan of this label. */
-    onShippedElsewhere?: () => void;
+    /** The seller sends it from a counter instead (or already did). */
+    onSendMyself?: () => void;
 }) {
     const { t, isThai } = useTranslation();
     const statuses = labels.map((l) => l?.pickup_status || null);
@@ -181,11 +203,11 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhe
     } else if (failed) {
         text = t('parcel.pickupNotBooked');
     } else {
-        text = t('parcel.dropoffPlanned');
+        text = t('parcel.noCourierYet');
     }
 
     const showBook = !requesting && (bookedAt === null || canRebook);
-    const icon = cancelled ? 'fa-triangle-exclamation' : bookedAt !== null ? 'fa-truck' : 'fa-store';
+    const icon = cancelled ? 'fa-triangle-exclamation' : bookedAt !== null ? 'fa-truck' : 'fa-box';
 
     return (
         <div className={`rounded-xl border p-3 space-y-2 ${alert ? 'border-amber-500/20 bg-amber-500/10' : 'border-white/10 bg-white/5'}`}>
@@ -193,7 +215,7 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhe
                 <i className={`fa-solid ${icon} mt-0.5 opacity-70`}></i>
                 <span>{text}</span>
             </p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-wrap items-center gap-2">
                 {(showBook || requesting || busy) && (
                     <button
                         onClick={onBookPickup}
@@ -206,18 +228,12 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhe
                             : bookedAt !== null ? t('parcel.rebookPickup') : t('parcel.bookPickup')}
                     </button>
                 )}
-                <button
-                    onClick={openFlashBranchSearch}
-                    className="text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
-                >
-                    {t('parcel.findBranch')}
-                </button>
-                {onShippedElsewhere && (
+                {onSendMyself && (
                     <button
-                        onClick={onShippedElsewhere}
-                        className="text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
+                        onClick={onSendMyself}
+                        className="h-9 px-3 rounded-lg bg-white/5 text-slate-200 border border-white/10 font-bold text-xs hover:bg-white/10 transition-colors"
                     >
-                        {t('parcel.shippedElsewhere')}
+                        {t('parcel.sendMyself')}
                     </button>
                 )}
             </div>
@@ -227,35 +243,28 @@ export function ParcelHandoffNote({ labels, busy, onBookPickup, onShippedElsewhe
 
 export const HANDOFF_FIELD_MAX = 60;
 
-/** The buyer's details a seller copies onto the counter's form (self mode). */
-export interface RecipientInfo {
-    name: string | null;
-    phone: string | null;
-    address: string | null;
-}
-
 /**
- * Two jobs, one sheet. 'self': the seller shipped a PAID order themselves,
- * from any counter, and enters the number it gave them (lib/parcels
- * shipSelf; the buyer's address and phone are shown so they can fill the
- * form, and the number is required unless the cards were handed over in
- * person). 'elsewhere': a parcel that already had our Flash label left
- * another way (lib/parcels handOffParcel; the number is optional). Carrier
- * chips come from lib/carriers so the same names reach 17TRACK; free text
- * covers everything else.
+ * Send it yourself: the seller takes the parcel to any counter, pays there
+ * and enters the number from the receipt. Shows the buyer's name, phone and
+ * address with a Copy button for the counter's form. The number is required
+ * unless the cards were handed over in person. Carrier chips come from
+ * lib/carriers so the same names reach 17TRACK; free text covers the rest.
+ * `labelled`: the parcel already has an unused Flash label, which the counter
+ * does not need (the caller posts to /api/orders/label/handoff instead of
+ * /self-ship).
  */
-export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhere', recipient = null }: {
+export function SendMyselfSheet({ busy, onSubmit, onClose, recipient = null, labelled = false }: {
     busy: boolean;
     onSubmit: (carrier: string, trackingNumber: string) => void;
     onClose: () => void;
-    mode?: 'elsewhere' | 'self';
     recipient?: RecipientInfo | null;
+    labelled?: boolean;
 }) {
     const { t, isThai } = useTranslation();
     const [carrier, setCarrier] = React.useState('');
     const [trackingNumber, setTrackingNumber] = React.useState('');
     const [copied, setCopied] = React.useState(false);
-    const needsNumber = mode === 'self' && !isByHand(carrier);
+    const needsNumber = !isByHand(carrier);
     const canSubmit = carrier.trim().length > 0 && (!needsNumber || trackingNumber.trim().length > 0) && !busy;
     const copyRecipient = async () => {
         const text = [recipient?.name, recipient?.phone, recipient?.address].filter(Boolean).join('\n');
@@ -269,6 +278,7 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhe
     };
     const inputClass =
         'w-full h-11 rounded-xl bg-black/30 border border-white/10 px-3 text-sm text-white placeholder:text-slate-600 outline-none focus:border-brand-cyan/50';
+    const hasRecipient = !!recipient && !!(recipient.name || recipient.phone || recipient.address);
 
     return (
         <BodyPortal>
@@ -286,22 +296,23 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhe
                 }}
                 role="dialog"
                 aria-modal="true"
-                aria-labelledby="shipped-elsewhere-title"
+                aria-labelledby="send-myself-title"
             >
                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-green to-brand-cyan"></div>
                 <div className="flex justify-between items-start gap-3">
-                    <h3 id="shipped-elsewhere-title" className="text-lg font-black text-white leading-tight">
-                        {t(mode === 'self' ? 'parcel.shipSelfTitle' : 'parcel.shippedElsewhereTitle')}
+                    <h3 id="send-myself-title" className="text-lg font-black text-white leading-tight">
+                        {t('parcel.sendMyselfTitle')}
                     </h3>
                     <button type="button" onClick={onClose} disabled={busy} aria-label={t('orderActions.cancel')} className="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
                         <i className="fa-solid fa-xmark text-slate-400"></i>
                     </button>
                 </div>
-                <p className="text-slate-400 text-sm leading-relaxed">
-                    {t(mode === 'self' ? 'parcel.shipSelfIntro' : 'parcel.shippedElsewhereIntro')}
-                </p>
+                <p className="text-slate-300 text-sm leading-relaxed">{t('parcel.sendMyselfIntro')}</p>
+                {labelled && (
+                    <p className="text-slate-400 text-xs leading-relaxed">{t('parcel.sendMyselfLabelled')}</p>
+                )}
 
-                {mode === 'self' && recipient && (recipient.name || recipient.phone || recipient.address) && (
+                {hasRecipient && (
                     <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-1">
                         <div className="flex items-center justify-between gap-2">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('parcel.recipientLabel')}</p>
@@ -309,14 +320,14 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhe
                                 {copied ? t('parcel.copied') : t('parcel.copyAddress')}
                             </button>
                         </div>
-                        {recipient.name && <p className="text-sm text-white font-bold">{recipient.name}</p>}
-                        {recipient.phone && <p className="text-sm text-slate-200 font-mono">{recipient.phone}</p>}
-                        {recipient.address && <p className="text-sm text-slate-300 leading-relaxed">{recipient.address}</p>}
+                        {recipient?.name && <p className="text-sm text-white font-bold">{recipient.name}</p>}
+                        {recipient?.phone && <p className="text-sm text-slate-200 font-mono">{recipient.phone}</p>}
+                        {recipient?.address && <p className="text-sm text-slate-300 leading-relaxed">{recipient.address}</p>}
                     </div>
                 )}
 
                 <div className="space-y-2">
-                    <label htmlFor="handoff-carrier" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <label htmlFor="send-myself-carrier" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
                         {t('parcel.carrierLabel')}
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -336,7 +347,7 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhe
                         ))}
                     </div>
                     <input
-                        id="handoff-carrier"
+                        id="send-myself-carrier"
                         value={carrier}
                         onChange={(e) => setCarrier(e.target.value)}
                         maxLength={HANDOFF_FIELD_MAX}
@@ -347,11 +358,11 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhe
                 </div>
 
                 <div className="space-y-2">
-                    <label htmlFor="handoff-tracking" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <label htmlFor="send-myself-tracking" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
                         {t(needsNumber ? 'parcel.trackingLabelRequired' : 'parcel.handoffTrackingLabel')}
                     </label>
                     <input
-                        id="handoff-tracking"
+                        id="send-myself-tracking"
                         value={trackingNumber}
                         onChange={(e) => setTrackingNumber(e.target.value)}
                         maxLength={HANDOFF_FIELD_MAX}
@@ -367,7 +378,7 @@ export function ShippedElsewhereSheet({ busy, onSubmit, onClose, mode = 'elsewhe
                     disabled={!canSubmit}
                     className="w-full h-11 rounded-xl bg-brand-cyan text-black font-bold text-sm hover:bg-brand-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    {busy ? t('parcel.shippedElsewhereBusy') : t(mode === 'self' ? 'parcel.shipSelfConfirm' : 'parcel.shippedElsewhereConfirm')}
+                    {busy ? t('parcel.sendMyselfBusy') : t('parcel.sendMyselfConfirm')}
                 </button>
             </form>
         </div>

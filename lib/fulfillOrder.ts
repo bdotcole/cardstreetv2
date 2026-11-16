@@ -451,13 +451,15 @@ export async function fulfillOrdersByTransferGroup(
             result.errors.push(`Inventory transfer error: ${invErr.message}`);
         }
 
-        // ─── Labels are minted later, by the seller ───
-        // No Flash call here. The waybill, label PDF and pickup are created
-        // when the seller presses Create label in the app (lib/parcels), so
-        // the seller decides which of a buyer's orders travel in one parcel
-        // and nothing ever has to be cancelled at Flash. Orders rest at
-        // 'paid' until then; app/api/cron/recover-unshipped-orders mints for
-        // sellers who never act, after a long grace window.
+        // ─── The seller ships it later ───
+        // No Flash call here. The seller chooses in the app (lib/parcels):
+        // book a Flash courier (waybill, label PDF and pickup made then) or
+        // send it from a counter and enter the number. So the seller decides
+        // which of a buyer's orders travel in one parcel and nothing ever has
+        // to be cancelled at Flash. Orders rest at 'paid' until then; the ship
+        // reminders chase a seller who never acts. Nothing mints a label for
+        // them any more: of the 8 labels the old 24h cron made without the
+        // seller choosing, one parcel arrived (2026-10-01..11-16).
         const sellerIds = [...new Set(orders.map(o => o.seller_id))];
 
         // ─── Step 8: Send notifications ───

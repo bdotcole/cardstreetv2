@@ -384,7 +384,8 @@ export function soldNotificationContent(totalAmount: number, orderId: string, it
                         ? `ยินดีด้วย! การ์ด ${thItem} ของคุณขายได้แล้วในราคา ${amount} บาท `
                         : `ยินดีด้วย! สินค้าของคุณขายได้แล้วในราคา ${amount} บาท `) +
                     (langWord ? `ผู้ซื้อสั่งการ์ดเวอร์ชัน${langWord.th} กรุณาส่งการ์ดใบนั้น ` : '') +
-                    'เปิดแอป Cardstreet ไปที่ รายการรอจัดส่ง แล้วกด "สร้างและพิมพ์ป้ายจัดส่ง" เพื่อสร้างใบปะหน้า Flash Express ' +
+                    'เปิดคำสั่งซื้อแล้วเลือกวิธีส่ง: เรียกพนักงาน Flash มารับถึงที่ (พิมพ์ใบปะหน้าจากแอป) ' +
+                    'หรือส่งเองที่เคาน์เตอร์ไหนก็ได้ เช่น Flash Express ไปรษณีย์ไทย Kerry หรือ J&T แล้วกรอกเลขพัสดุ ไม่ต้องมีเครื่องพิมพ์ ' +
                     'หากผู้ซื้อคนเดียวกันมีหลายออเดอร์ คุณสามารถรวมส่งเป็นพัสดุเดียวได้',
             },
             {
@@ -393,13 +394,14 @@ export function soldNotificationContent(totalAmount: number, orderId: string, it
                         ? `Great news! Your ${enItem} has been sold for ${amount} THB. `
                         : `Great news! Your item has been sold for ${amount} THB. `) +
                     (langWord ? `The buyer ordered the ${langWord.en}-language print, so please ship that one. ` : '') +
-                    'Open the Cardstreet app, go to Pending Shipments and tap "Create & print label" to create your Flash Express label. ' +
+                    'Open the order and choose how to send it: book a Flash courier to collect it from you (you print the label from the app), ' +
+                    'or send it yourself from any counter (Flash Express, Thailand Post, Kerry or J&T) and enter the tracking number. No printer needed. ' +
                     'If the same buyer has several orders, you can combine them into one parcel.',
                 muted: true,
             },
         ],
-        cta: { label: 'Create label · สร้างป้ายจัดส่ง', url: `${appBaseUrl()}/orders/${orderId}` },
-        pushBody: `ขายได้ ${amount} บาท${thItem ? ` · ${thItem}` : ''} — เปิดแอปเพื่อสร้างป้ายจัดส่ง · Open the app to create your shipping label.`,
+        cta: { label: 'Open the order · เปิดคำสั่งซื้อ', url: `${appBaseUrl()}/orders/${orderId}` },
+        pushBody: `ขายได้ ${amount} บาท${thItem ? ` · ${thItem}` : ''} — เปิดแอปเพื่อเลือกวิธีส่ง · Open the app to choose how to ship it.`,
     });
 }
 
@@ -466,30 +468,34 @@ export interface LabelReadyDetails {
 }
 
 /**
- * The seller's "label is ready" copy. Fires when the seller mints the label
- * (lib/parcels), adds orders to an unscanned parcel, or the safety-net cron
- * mints for them. The PDF rides the email as a Postmark attachment; the push
+ * The seller's "label is ready" copy. Fires when the seller books a courier
+ * (lib/parcels mints the label with the pickup), adds orders to an unscanned
+ * parcel, or the label route's recovery mints a lost one. The PDF rides the
+ * email as a Postmark attachment; the push
  * is one line and the app button prints it. Exported for render checks.
  */
 export function labelReadyNotificationContent(d: LabelReadyDetails) {
     const pno = d.trackingNumber ? ` (${d.trackingNumber})` : '';
     const many = (d.itemCount ?? 1) > 1;
-    const packTh = many ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้าที่พิมพ์แล้ว (สาขาไม่รับใบปะหน้าที่โชว์บนมือถือ) ` : 'แพ็กการ์ด ติดใบปะหน้าที่พิมพ์แล้ว (สาขาไม่รับใบปะหน้าที่โชว์บนมือถือ) ';
-    const packEn = many ? `Pack all ${d.itemCount} cards for this parcel in one envelope and attach the printed label (counters refuse a label shown on a phone)` : 'Pack the card and attach the printed label (counters refuse a label shown on a phone)';
+    const packTh = many ? `ใส่การ์ดทั้ง ${d.itemCount} ใบของพัสดุนี้ในซองเดียว ติดใบปะหน้าที่พิมพ์แล้ว ` : 'แพ็กการ์ด ติดใบปะหน้าที่พิมพ์แล้ว ';
+    const packEn = many ? `Pack all ${d.itemCount} cards for this parcel in one envelope and attach the printed label` : 'Pack the card and attach the printed label';
     // Say plainly whether a courier is coming: sellers who were never told a
-    // pickup had been booked missed the courier, and Flash cancelled it.
+    // pickup had been booked missed the courier, and Flash cancelled it. The
+    // way out is always "send it yourself from a counter", never "take this
+    // label to a branch": counters refused our labels (2026-11). 'dropoff'
+    // only comes from the label route's recovery mint now.
     const handoffTh =
         d.shipMethod === 'pickup'
-            ? 'แล้วรอพนักงาน Flash เข้ามารับที่ที่อยู่ในโปรไฟล์ของคุณ ส่วนใหญ่ภายในวันนี้หรือวันทำการถัดไป พนักงานจะเก็บค่าส่งตอนรับพัสดุ ถ้าไม่สะดวกรอ นำไปส่งที่สาขา Flash Express โดยตรงโดยใช้ใบปะหน้าเดิม'
+            ? 'แล้วรอพนักงาน Flash เข้ามารับที่ที่อยู่ในโปรไฟล์ของคุณ ส่วนใหญ่ภายในวันนี้หรือวันทำการถัดไป พนักงานจะเก็บค่าส่งตอนรับพัสดุ ถ้าไม่สะดวกรอ กดเรียกใหม่ในแอป หรือส่งเองที่เคาน์เตอร์ไหนก็ได้แล้วกรอกเลขพัสดุในแอป'
             : d.shipMethod === 'dropoff'
-              ? 'แล้วนำไปส่งที่สาขา Flash Express โดยตรง ไม่ใช่ร้าน Flash Home (ร้าน Flash Home เคยปฏิเสธใบปะหน้าแบบนี้) รอให้พนักงานสแกนและเก็บใบเสร็จไว้ ถ้าต้องการให้พนักงานมารับ กดเรียกพนักงานเข้ารับได้ในแอป'
-              : 'แล้วส่งให้ Flash ตอนมารับหรือนำไปส่งที่สาขา';
+              ? 'ยังไม่ได้เรียกพนักงานเข้ารับ เปิดคำสั่งซื้อในแอปเพื่อเรียกพนักงาน Flash หรือส่งเองที่เคาน์เตอร์ไหนก็ได้แล้วกรอกเลขพัสดุ'
+              : 'แล้วส่งให้พนักงาน Flash ตอนมารับ';
     const handoffEn =
         d.shipMethod === 'pickup'
-            ? '. A Flash courier will collect it from the address on your profile, usually today or the next working day, and collects the shipping fee from you. Not home? Take it to an official Flash Express branch with the same label.'
+            ? '. A Flash courier will collect it from the address on your profile, usually today or the next working day, and collects the shipping fee from you. Can\'t be there? Book again in the app, or send it yourself from any counter and enter the number in the app.'
             : d.shipMethod === 'dropoff'
-              ? ', then take it to an official Flash Express branch, not a Flash Home shop (they have refused these labels). Watch the staff scan it and keep the receipt. Want a courier to collect it instead? Book a pickup in the app.'
-              : ', and hand it to Flash at pickup or at a branch.';
+              ? '. No courier is booked yet: open the order in the app to book a Flash courier, or send it yourself from any counter and enter the number.'
+              : ', and hand it to the Flash courier when they come.';
     return emailPlusPushContent({
         title: SUBJECTS.labelGenerated!,
         emailParagraphs: [
@@ -602,19 +608,19 @@ export function pickupCancelledNotificationContent(d: PickupCancelledDetails) {
                     `Flash Express ยกเลิกการเข้ารับ${parcelTh}${pno} ของคุณแล้ว พนักงานจะไม่มาตามนัดเดิม ` +
                     'ส่วนใหญ่เกิดเพราะพนักงานมาแล้วไม่มีคนอยู่ หรือพัสดุยังไม่พร้อม ใบปะหน้าเดิมยังใช้ได้ ' +
                     'เลือกได้สองทาง: กดเรียกพนักงานเข้ารับใหม่ในแอปเมื่อแพ็กพัสดุเสร็จและมีคนอยู่รับ ' +
-                    'หรือนำพัสดุไปส่งที่สาขา Flash Express โดยตรง ไม่ใช่ร้าน Flash Home',
+                    'หรือส่งเองที่เคาน์เตอร์ไหนก็ได้ เช่น Flash Express ไปรษณีย์ไทย Kerry หรือ J&T แล้วกดส่งเองในแอปและกรอกเลขพัสดุ',
             },
             {
                 text:
                     `Flash Express cancelled the courier pickup for ${parcelEn}${pno}. The courier is not coming on that booking; ` +
                     'this usually happens when nobody was home or the parcel was not ready. The label is still valid. ' +
                     'Either book the courier again from the app once the parcel is packed and someone is there, ' +
-                    'or take it to an official Flash Express branch, not a Flash Home shop.',
+                    'or send it yourself from any counter (Flash Express, Thailand Post, Kerry or J&T), then tap Send it myself in the app and enter the number.',
                 muted: true,
             },
         ],
         cta: { label: 'เปิดพัสดุ · Open the parcel', url: `${appBaseUrl()}/orders/${d.id}` },
-        pushBody: `Flash ยกเลิกการเข้ารับ${pno} กดเรียกใหม่ หรือนำไปส่งที่สาขา · Flash cancelled the pickup. Book again or drop it at a branch.`,
+        pushBody: `Flash ยกเลิกการเข้ารับ${pno} กดเรียกใหม่ หรือส่งเองแล้วกรอกเลขพัสดุ · Flash cancelled the pickup. Book again, or send it yourself and enter the number.`,
     });
 }
 
@@ -3457,7 +3463,15 @@ export async function sendShipReminderNotification(
                 providers: postmarkOverride(title),
                 content: emailPlusPushContent({
                     title,
-                    emailParagraphs: [{ text: body }],
+                    emailParagraphs: [
+                        { text: body },
+                        {
+                            text:
+                                'เปิดคำสั่งซื้อแล้วเลือก: เรียกพนักงาน Flash มารับ หรือส่งเองที่เคาน์เตอร์ไหนก็ได้แล้วกรอกเลขพัสดุ · ' +
+                                'Open the order and pick one: a Flash courier collects it, or send it yourself from any counter and enter the number.',
+                            muted: true,
+                        },
+                    ],
                     cta: { label: 'เปิดคำสั่งซื้อ · Open the order', url },
                     pushBody: body,
                 }),

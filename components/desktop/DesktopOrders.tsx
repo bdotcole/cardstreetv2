@@ -14,7 +14,7 @@ import type { Offer } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
 import { groupByTransferGroup, groupByParcel, countCheckouts, isAwaitingLabel, isUnscannedParcel, isPickupCancelled, isHandoffable, hasShippingLabel, handoffOf, parcelsByBuyer, isRealWaybill, sellerFeeOf, sellerNetOf, buyerPaidOf, type ShipMethod } from '@/lib/orderGroups';
-import { ShipMethodSheet, ParcelHandoffNote, ShippedElsewhereSheet, HandoffSummary, type PickupInfo, type RecipientInfo } from '@/components/ParcelHandoff';
+import { CourierSheet, ParcelHandoffNote, SendMyselfSheet, HandoffSummary, type PickupInfo, type RecipientInfo } from '@/components/ParcelHandoff';
 import { useOfferBadge } from '@/lib/hooks/useOfferBadge';
 import { cardAddedToCollection, canReportOrder, canReviewOrder, shipByDate, canBuyerCancelUnshipped, isUnshippedOrder, buyerCancelDate } from '@/lib/orderDisputes';
 import ReviewSheet, { type OrderReview } from '@/components/ReviewSheet';
@@ -60,7 +60,7 @@ interface OrderRow {
         handoff_carrier?: string | null;
         handoff_tracking_number?: string | null;
         handed_off_at?: string | null;
-        // Seller side: drop-off or a booked courier (components/ParcelHandoff).
+        // Seller side: whether a Flash courier is booked (components/ParcelHandoff).
         pickup_status?: string | null;
         updated_at?: string | null;
     }[];
@@ -415,12 +415,20 @@ export default function DesktopOrders() {
     // or add to a waybill Flash has not scanned yet. On success the tab
     // refreshes and the label opens (any order id in the parcel works).
     const [labelBusyIds, setLabelBusyIds] = useState<string[]>([]);
-    // A new label first asks how the parcel reaches Flash (components/ParcelHandoff):
-    // a courier is booked only when the seller says so. Adding cards to an
-    // existing parcel skips the question; that parcel is already arranged.
+    // Booking a Flash courier (components/ParcelHandoff CourierSheet): a new
+    // parcel mints its label with the pickup in one request ('create'); a
+    // labelled parcel books again ('pickup'). Both carry the orders and the
+    // buyer so the sheet can hand over to Send it yourself. Adding cards to an
+    // existing parcel skips the sheet; that parcel is already arranged.
     const [shipSheet, setShipSheet] = useState<
-        { mode: 'create'; orderIds: string[] } | { mode: 'pickup'; trackingNumber: string } | null
+        | { mode: 'create'; orderIds: string[]; recipient: RecipientInfo | null }
+        | { mode: 'pickup'; trackingNumber: string; orderIds: string[]; recipient: RecipientInfo | null; canSendMyself: boolean }
+        | null
     >(null);
+    // "Also send this buyer's other orders in the same parcel", per row (keyed
+    // by the row's first order id). Off by default: combining is the seller's
+    // call, since a label for cards they do not have in hand is hard to undo.
+    const [combineFor, setCombineFor] = useState<Record<string, boolean>>({});
     const [pickupInfo, setPickupInfo] = useState<PickupInfo | null>(null);
     const [pickupBusyPno, setPickupBusyPno] = useState<string | null>(null);
     const createLabel = async (orderIds: string[], attachToTrackingNumber?: string, shipMethod?: ShipMethod) => {
@@ -435,7 +443,6 @@ export default function DesktopOrders() {
             if (!res.ok) throw new Error(data?.error || 'label create failed');
             showToast(
                 attachToTrackingNumber ? t('parcel.created')
-                    : shipMethod !== 'pickup' ? t('parcel.createdDropoff')
                     : data?.pickupBooked ? t('parcel.createdPickup')
                     : t('parcel.createdPickupFailed'),
                 shipMethod === 'pickup' && !attachToTrackingNumber && !data?.pickupBooked ? 'error' : 'success',
@@ -450,8 +457,9 @@ export default function DesktopOrders() {
         }
     };
 
-    // Book a Flash courier for a parcel that already has its label: the seller
-    // chose drop-off and changed their mind, or the booked courier never came.
+    // Book a Flash courier for a parcel that already has its label: the booked
+    // courier never came or Flash cancelled it, or a drop-off label made before
+    // 2026-11-16 never reached a counter.
     const bookPickup = async (trackingNumber: string) => {
         setPickupBusyPno(trackingNumber);
         try {
@@ -475,61 +483,34 @@ export default function DesktopOrders() {
         }
     };
 
-    // The parcel left without a Flash scan of our label (handed to Flash
-    // staff, another courier, by hand): the seller says so here and the order
-    // moves to shipped, the buyer is told and can confirm receipt. Without it
-    // the order sat at label_generated forever (lib/parcels handOffParcel).
-    const [handoffSheet, setHandoffSheet] = useState<{ orderIds: string[] } | null>(null);
-    const [handoffBusy, setHandoffBusy] = useState(false);
-    const handOffParcel = async (orderIds: string[], carrier: string, trackingNumber: string) => {
-        setHandoffBusy(true);
+    // Send it yourself: the seller took the parcel to any counter, paid there,
+    // and enters the number from the receipt. No label yet: lib/parcels shipSelf
+    // (no Flash waybill is minted). An unused label already exists (a cancelled
+    // courier, an old drop-off label): handOffParcel. Either way the order
+    // moves to shipped, the buyer is told and 17TRACK follows the number.
+    const [sendSheet, setSendSheet] = useState<{ orderIds: string[]; recipient: RecipientInfo | null; labelled: boolean } | null>(null);
+    const [sendBusy, setSendBusy] = useState(false);
+    const sendMyself = async (sheet: { orderIds: string[]; labelled: boolean }, carrier: string, trackingNumber: string) => {
+        setSendBusy(true);
         try {
-            const res = await fetch('/api/orders/label/handoff', {
+            const res = await fetch(sheet.labelled ? '/api/orders/label/handoff' : '/api/orders/label/self-ship', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderIds, carrier, trackingNumber }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.error || 'handoff failed');
-            setHandoffSheet(null);
-            showToast(t('parcel.shippedElsewhereDone'), 'success');
-            await fetchTab('shipments');
-        } catch (err) {
-            console.error('Mark shipped elsewhere failed:', err);
-            showToast(t('parcel.shippedElsewhereFailed'), 'error');
-        } finally {
-            setHandoffBusy(false);
-        }
-    };
-
-    // Ship it myself: the seller took the cards to any counter (a Flash Home,
-    // Kerry, J&T, the post office), paid there, and enters the number it gave
-    // them (lib/parcels shipSelf). No Flash label is minted; the buyer is told
-    // and 17TRACK follows the number. The sheet shows the buyer's address and
-    // phone for the counter's form.
-    const [selfShipSheet, setSelfShipSheet] = useState<{ orderIds: string[]; recipient: RecipientInfo | null } | null>(null);
-    const [selfShipBusy, setSelfShipBusy] = useState(false);
-    const shipSelf = async (orderIds: string[], carrier: string, trackingNumber: string) => {
-        setSelfShipBusy(true);
-        try {
-            const res = await fetch('/api/orders/label/self-ship', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderIds, carrier, trackingNumber }),
+                body: JSON.stringify({ orderIds: sheet.orderIds, carrier, trackingNumber }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-                showToast(t(data?.code === 'TRACKING_REQUIRED' ? 'parcel.trackingRequired' : 'parcel.shipSelfFailed'), 'error');
+                showToast(t(data?.code === 'TRACKING_REQUIRED' ? 'parcel.trackingRequired' : 'parcel.sendMyselfFailed'), 'error');
                 return;
             }
-            setSelfShipSheet(null);
-            showToast(t('parcel.shipSelfDone'), 'success');
+            setSendSheet(null);
+            showToast(t('parcel.sendMyselfDone'), 'success');
             await fetchTab('shipments');
         } catch (err) {
-            console.error('Self-ship failed:', err);
-            showToast(t('parcel.shipSelfFailed'), 'error');
+            console.error('Send it yourself failed:', err);
+            showToast(t('parcel.sendMyselfFailed'), 'error');
         } finally {
-            setSelfShipBusy(false);
+            setSendBusy(false);
         }
     };
 
@@ -836,7 +817,13 @@ export default function DesktopOrders() {
                                         : undefined;
                                     const openParcelPno = openParcel?.[0]?.shipping_labels?.[0]?.tracking_number;
                                     const combineIds = [group, ...otherUnlabelled].flatMap((g) => g.map((o) => o.id));
+                                    const shipIds = combineFor[order.id] && otherUnlabelled.length > 0 ? combineIds : group.map((o) => o.id);
                                     const labelBusy = group.some((o) => labelBusyIds.includes(o.id));
+                                    // The buyer's details for the counter's form (sent by
+                                    // /api/profile/shipments only while the parcel has not left).
+                                    const recipient: RecipientInfo | null = order.buyer
+                                        ? { name: order.buyer.display_name ?? null, phone: order.buyer.phone ?? null, address: order.buyer.address ?? null }
+                                        : null;
                                     // Delivered/completed rows linger as a delivery
                                     // notice until cleared — label printing no longer
                                     // applies to them.
@@ -868,28 +855,26 @@ export default function DesktopOrders() {
                                             {t('desktop.orders.liveBreakShipsWithParcel')}
                                         </span>
                                     ) : awaitingLabel ? (
+                                        // The two answers (components/ParcelHandoff): a
+                                        // Flash courier, or send it yourself from a counter.
                                         <>
                                             <button
-                                                onClick={() => setShipSheet({ mode: 'create', orderIds: group.map((o) => o.id) })}
+                                                onClick={() => setShipSheet({ mode: 'create', orderIds: shipIds, recipient })}
                                                 disabled={labelBusy}
                                                 className={BTN_GREEN}
+                                                title={t('parcel.courierChoiceBody')}
                                             >
-                                                <i className="fa-solid fa-tag"></i>
-                                                {labelBusy ? t('parcel.creating') : t('parcel.createLabel')}
+                                                <i className="fa-solid fa-truck"></i>
+                                                {labelBusy ? t('parcel.creating') : t('parcel.courierChoice')}
                                             </button>
                                             <button
-                                                onClick={() => setSelfShipSheet({
-                                                    orderIds: group.map((o) => o.id),
-                                                    recipient: order.buyer
-                                                        ? { name: order.buyer.display_name ?? null, phone: order.buyer.phone ?? null, address: order.buyer.address ?? null }
-                                                        : null,
-                                                })}
+                                                onClick={() => setSendSheet({ orderIds: shipIds, recipient, labelled: false })}
                                                 disabled={labelBusy}
                                                 className={BTN_SECONDARY}
-                                                title={t('parcel.shipSelfHint')}
+                                                title={t('parcel.sendMyselfBody')}
                                             >
-                                                <i className="fa-solid fa-truck-fast text-slate-400"></i>
-                                                {t('parcel.shipSelf')}
+                                                <i className="fa-solid fa-store text-slate-400"></i>
+                                                {t('parcel.sendMyself')}
                                             </button>
                                         </>
                                     ) : handoffOf(order.shipping_labels?.[0]) ? null : (
@@ -990,19 +975,17 @@ export default function DesktopOrders() {
                                                 in this parcel; a parcel Flash has not collected
                                                 yet can take these cards too. */}
                                             {!isBreakOrder && awaitingLabel && otherUnlabelled.length > 0 && (
-                                                <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 px-3 py-2 space-y-2 max-w-md">
-                                                    <p className="text-xs font-bold text-brand-cyan">
-                                                        {t('parcel.moreUnlabelled').replace('{count}', String(otherUnlabelled.length))}
-                                                    </p>
-                                                    <button
-                                                        onClick={() => setShipSheet({ mode: 'create', orderIds: combineIds })}
-                                                        disabled={labelBusy}
-                                                        className="bg-brand-cyan/15 hover:bg-brand-cyan/25 border border-brand-cyan/30 text-brand-cyan text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                                                    >
-                                                        <i className="fa-solid fa-box mr-2"></i>
-                                                        {t('parcel.combineAndPrint').replace('{count}', String(otherUnlabelled.length + 1))}
-                                                    </button>
-                                                </div>
+                                                <label className="flex items-start gap-2.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 px-3 py-2 max-w-md cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!combineFor[order.id]}
+                                                        onChange={(e) => setCombineFor((prev) => ({ ...prev, [order.id]: e.target.checked }))}
+                                                        className="mt-0.5 w-4 h-4 accent-cyan-400 flex-shrink-0"
+                                                    />
+                                                    <span className="text-xs font-bold text-brand-cyan leading-relaxed">
+                                                        {t('parcel.combineOthers').replace('{count}', String(otherUnlabelled.length))}
+                                                    </span>
+                                                </label>
                                             )}
                                             {!isBreakOrder && awaitingLabel && openParcelPno && (
                                                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 space-y-2 max-w-md">
@@ -1017,28 +1000,33 @@ export default function DesktopOrders() {
                                                     </button>
                                                 </div>
                                             )}
-                                            {/* Labelled, not yet scanned by Flash: what was
-                                                arranged (drop-off or a booked courier) and a
-                                                way to book one. */}
-                                            {!isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel) && (
-                                                <div className="max-w-md">
-                                                    <ParcelHandoffNote
-                                                        labels={group.map((o) => o.shipping_labels?.[0])}
-                                                        busy={pickupBusyPno === pno}
-                                                        onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno })}
-                                                        onShippedElsewhere={group.every(isHandoffable) ? () => setHandoffSheet({ orderIds: group.map((o) => o.id) }) : undefined}
-                                                    />
-                                                </div>
-                                            )}
+                                            {/* Labelled, not yet scanned by Flash: whether a
+                                                courier is coming, then book one (again) or
+                                                send it yourself. */}
+                                            {!isBreakOrder && isRealWaybill(pno) && group.every(isUnscannedParcel) && (() => {
+                                                const handoffable = group.every(isHandoffable);
+                                                const orderIds = group.map((o) => o.id);
+                                                return (
+                                                    <div className="max-w-md">
+                                                        <ParcelHandoffNote
+                                                            labels={group.map((o) => o.shipping_labels?.[0])}
+                                                            busy={pickupBusyPno === pno}
+                                                            onBookPickup={() => setShipSheet({ mode: 'pickup', trackingNumber: pno, orderIds, recipient, canSendMyself: handoffable })}
+                                                            onSendMyself={handoffable ? () => setSendSheet({ orderIds, recipient, labelled: true }) : undefined}
+                                                        />
+                                                    </div>
+                                                );
+                                            })()}
                                             {/* A MANUAL placeholder never gets a Flash scan
-                                                either; the seller who shipped it anyway can
-                                                still move the order on. */}
+                                                either; the seller can send it from a counter
+                                                and move the order on. */}
                                             {!isBreakOrder && pno === 'MANUAL' && group.every(isHandoffable) && (
                                                 <button
-                                                    onClick={() => setHandoffSheet({ orderIds: group.map((o) => o.id) })}
-                                                    className="text-slate-400 hover:text-white text-xs font-bold underline underline-offset-2"
+                                                    onClick={() => setSendSheet({ orderIds: group.map((o) => o.id), recipient, labelled: true })}
+                                                    className={BTN_SECONDARY}
                                                 >
-                                                    {t('parcel.shippedElsewhere')}
+                                                    <i className="fa-solid fa-store text-slate-400"></i>
+                                                    {t('parcel.sendMyself')}
                                                 </button>
                                             )}
                                             {/* The seller said this parcel left another way:
@@ -1202,7 +1190,7 @@ export default function DesktopOrders() {
                 />
             )}
             {shipSheet && (
-                <ShipMethodSheet
+                <CourierSheet
                     mode={shipSheet.mode}
                     pickup={pickupInfo}
                     onClose={() => setShipSheet(null)}
@@ -1212,28 +1200,26 @@ export default function DesktopOrders() {
                         const prefix = path === '/en' || path.startsWith('/en/') ? '/en' : '';
                         router.push(`${prefix}/settings?tab=profile`);
                     }}
-                    onChoose={(method) => {
+                    onConfirm={() => {
                         const sheet = shipSheet;
                         setShipSheet(null);
-                        if (sheet.mode === 'create') createLabel(sheet.orderIds, undefined, method);
+                        if (sheet.mode === 'create') createLabel(sheet.orderIds, undefined, 'pickup');
                         else bookPickup(sheet.trackingNumber);
                     }}
+                    onSendMyself={shipSheet.mode === 'create' || shipSheet.canSendMyself ? () => {
+                        const sheet = shipSheet;
+                        setShipSheet(null);
+                        setSendSheet({ orderIds: sheet.orderIds, recipient: sheet.recipient, labelled: sheet.mode === 'pickup' });
+                    } : undefined}
                 />
             )}
-            {handoffSheet && (
-                <ShippedElsewhereSheet
-                    busy={handoffBusy}
-                    onClose={() => setHandoffSheet(null)}
-                    onSubmit={(carrier, trackingNumber) => handOffParcel(handoffSheet.orderIds, carrier, trackingNumber)}
-                />
-            )}
-            {selfShipSheet && (
-                <ShippedElsewhereSheet
-                    mode="self"
-                    recipient={selfShipSheet.recipient}
-                    busy={selfShipBusy}
-                    onClose={() => setSelfShipSheet(null)}
-                    onSubmit={(carrier, trackingNumber) => shipSelf(selfShipSheet.orderIds, carrier, trackingNumber)}
+            {sendSheet && (
+                <SendMyselfSheet
+                    recipient={sendSheet.recipient}
+                    labelled={sendSheet.labelled}
+                    busy={sendBusy}
+                    onClose={() => setSendSheet(null)}
+                    onSubmit={(carrier, trackingNumber) => sendMyself(sendSheet, carrier, trackingNumber)}
                 />
             )}
         </div>

@@ -154,7 +154,7 @@ export async function GET(
 
         if (needsRecovery) {
             console.log(`[Orders/Label] No usable label for order ${orderId} at status ${order.status} — attempting Flash recovery`);
-            // Shared with the recover-unshipped-orders cron. Re-reads
+            // lib/flashRecovery: re-reads
             // shipping_labels before minting and never double-mints (Flash does
             // not dedupe on outTradeNo).
             const rec = await recoverShipmentForOrder(admin, {

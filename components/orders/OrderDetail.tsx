@@ -342,8 +342,9 @@ export default function OrderDetail({ order, role, orderId, signedOut, variant =
         }
     };
 
-    // Labels are created where the seller can also combine this buyer's other
-    // orders into the same parcel. Phones get the SPA's Pending Shipments card
+    // The seller chooses how it ships (a Flash courier, or send it yourself) on
+    // the parcel card, where they can also combine this buyer's other orders
+    // into the same parcel. Phones get the SPA's Pending Shipments card
     // for this order (the ?order= contract in MobileHome); desktop gets the
     // To ship tab. Same UA test as middleware.ts isDesktopClient.
     const goCreateLabel = () => {
@@ -568,8 +569,8 @@ export default function OrderDetail({ order, role, orderId, signedOut, variant =
             </button>
         ) : showCreateLabel ? (
             <button onClick={goCreateLabel} className={BTN_PRIMARY}>
-                <i className="fa-solid fa-print"></i>
-                {t('parcel.createLabel')}
+                <i className="fa-solid fa-truck"></i>
+                {t('parcel.shipThis')}
             </button>
         ) : showConfirm ? (
             <button onClick={confirmDelivery} disabled={confirmBusy} className={BTN_PRIMARY}>
@@ -855,8 +856,8 @@ export default function OrderDetail({ order, role, orderId, signedOut, variant =
                             onClick={goCreateLabel}
                             className="w-full bg-gradient-to-r from-brand-cyan to-brand-green text-brand-darker font-black uppercase tracking-wider py-3.5 rounded-xl active:scale-[0.98] transition-all"
                         >
-                            <i className="fa-solid fa-print mr-2"></i>
-                            {t('parcel.createLabel')}
+                            <i className="fa-solid fa-truck mr-2"></i>
+                            {t('parcel.shipThis')}
                         </button>
                     )}
                     {labelError && <p className="text-xs text-rose-300 text-center">{labelError}</p>}

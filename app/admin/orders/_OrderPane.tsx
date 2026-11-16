@@ -300,7 +300,7 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
                 <div className="glass rounded-2xl border border-white/10 p-4 space-y-2 min-w-0">
                     <p className="text-[10px] font-bold uppercase text-slate-500">Parcel</p>
                     {!parcel ? (
-                        <p className="text-sm text-slate-400">No label yet. The seller creates it from their To ship list; the safety-net cron mints one a day after payment.</p>
+                        <p className="text-sm text-slate-400">Not shipped yet. From their To ship list the seller books a Flash courier (which makes the label) or sends it from a counter and enters the number.</p>
                     ) : (
                         <div className="space-y-1.5 text-sm">
                             {trackingNumber ? (
@@ -319,8 +319,8 @@ export function OrderPane({ orderId, onOpenOrder, onShowAccount }: {
                             {parcel.handedOffAt
                                 ? <Row k="Handed off" v={`${fmt(parcel.handedOffAt)} via ${parcel.handoffCarrier ?? 'another carrier'}`} />
                                 : <Row k="Pickup" v={parcel.pickupStatus === 'cancelled'
-                                    ? `Courier cancelled${parcel.pickupCancelledAt ? ` ${fmt(parcel.pickupCancelledAt)}` : ''}; seller must book again or drop it off`
-                                    : parcel.pickupStatus === 'dropoff' ? 'Seller drops it at a Flash branch'
+                                    ? `Courier cancelled${parcel.pickupCancelledAt ? ` ${fmt(parcel.pickupCancelledAt)}` : ''}; seller must book again or send it themselves`
+                                    : parcel.pickupStatus === 'dropoff' ? 'No courier booked (old drop-off label)'
                                         : parcel.pickupStatus === 'scheduled' ? 'Courier booked'
                                             : parcel.pickupStatus === 'manual' ? 'No courier (manual)'
                                                 : parcel.pickupStatus} />}
