@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -26,7 +27,12 @@ import { fetchPublicSellers, type PublicSeller } from '@/lib/publicProfiles';
 import DesktopChatHost from '@/components/desktop/DesktopChatHost';
 import { useChatUnread } from '@/lib/hooks/useChatUnread';
 import { CHAT_OPEN_EVENT } from '@/lib/chat';
+import { useCardRequest } from '@/lib/hooks/useCardRequest';
 import { Card } from '@/types';
+
+// Loaded on first use: the nav is on every desktop page and the request form
+// (game and language pickers, the "did you mean" lookup) is rarely opened.
+const RequestCardModal = dynamic(() => import('@/components/RequestCardModal'), { ssr: false });
 
 /**
  * The nav's own path, stripped back to the bare route so it can be compared
@@ -59,12 +65,21 @@ export default function DesktopNav({ pathPrefix = '' }: {
     // Auth state comes from the cart provider — one shared subscription for
     // the whole desktop shell instead of one per component (multiple
     // concurrent getUser() calls were contending on the gotrue auth lock).
-    const { items: cartItems, openCart, user } = useDesktopCart();
+    const { items: cartItems, openCart, user, authChecked } = useDesktopCart();
     // Collector Pass chip. Shares one cached summary fetch with the hub host in
     // the desktop layout; null (hidden) when signed out or the flag is off.
     const { summary: rewards } = useRewardsSummary(!!user);
     const [query, setQuery] = useState('');
     const [authOpen, setAuthOpen] = useState(false);
+    // Why the sign-in wall is up, when a gated action opened it (the plain
+    // Sign in button gives no reason).
+    const [authReason, setAuthReason] = useState<string | undefined>(undefined);
+    // "Can't find your card?" in the search dropdown. Desktop had no way to
+    // ask for a missing card at all: the form lived only in the app's Scan tab.
+    const cardRequest = useCardRequest({
+        signedIn: authChecked ? !!user : undefined,
+        onRequireAuth: () => { setAuthReason(t('authGate.requestCard')); setAuthOpen(true); },
+    });
     const [menuOpen, setMenuOpen] = useState(false);
     // Compact-viewport nav drawer. The desktop link row, language toggle and
     // account cluster collapse into this below lg (the pages under /desktop/*
@@ -192,6 +207,13 @@ export default function DesktopNav({ pathPrefix = '' }: {
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         goToListings();
+    };
+
+    // The typed text stays in the box: it is what the form opens with, and
+    // what the user comes back to if they close the form.
+    const requestMissingCard = () => {
+        setSearchOpen(false);
+        cardRequest.open(query.trim());
     };
 
     const handleSignOut = async () => {
@@ -354,15 +376,36 @@ export default function DesktopNav({ pathPrefix = '' }: {
                                 </>
                             )}
                             {query.trim().length >= 2 && (
-                                <button
-                                    onClick={goToListings}
-                                    className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-bold text-brand-cyan hover:bg-white/5 border-t border-white/5 transition-colors text-left"
-                                >
-                                    <i className="fa-solid fa-store text-xs"></i>
-                                    <span className="truncate">
-                                        {t('desktop.searchListingsFor')} &ldquo;{query.trim()}&rdquo;
-                                    </span>
-                                </button>
+                                // Stuck to the bottom of the scrolling list:
+                                // on a laptop-height window eight results fill
+                                // the 70vh box, and both ways onward sat below
+                                // its fold.
+                                <div className="sticky bottom-0 bg-brand-dark">
+                                    <button
+                                        onClick={goToListings}
+                                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-bold text-brand-cyan hover:bg-white/5 border-t border-white/5 transition-colors text-left"
+                                    >
+                                        <i className="fa-solid fa-store text-xs"></i>
+                                        <span className="truncate">
+                                            {t('desktop.searchListingsFor')} &ldquo;{query.trim()}&rdquo;
+                                        </span>
+                                    </button>
+                                    {/* Under results as well as under "No
+                                        results": search returns its nearest
+                                        matches for almost any text, so a card
+                                        the catalog lacks still fills this list. */}
+                                    <button
+                                        onClick={requestMissingCard}
+                                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-bold text-slate-400 hover:bg-white/5 border-t border-white/5 transition-colors text-left"
+                                    >
+                                        <i className="fa-solid fa-circle-plus text-xs text-brand-cyan"></i>
+                                        {/* Wraps, never truncates: cut short in a
+                                            narrow box, the words lost are the action. */}
+                                        <span className="min-w-0">
+                                            {t('cardRequest.cantFind')} <span className="text-brand-cyan whitespace-nowrap">{t('cardRequest.requestIt')}</span>
+                                        </span>
+                                    </button>
+                                </div>
                             )}
                         </div>
                     )}
@@ -687,7 +730,19 @@ export default function DesktopNav({ pathPrefix = '' }: {
                 </div>
             )}
 
-            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+            <AuthModal
+                isOpen={authOpen}
+                onClose={() => { setAuthOpen(false); setAuthReason(undefined); }}
+                contextMessage={authReason}
+            />
+            {cardRequest.isOpen && (
+                <RequestCardModal
+                    isOpen
+                    onClose={cardRequest.close}
+                    initialQuery={cardRequest.query}
+                    onFoundCard={(card) => router.push(`${pathPrefix}/card/${card.id}`)}
+                />
+            )}
             <DesktopChatHost pathPrefix={pathPrefix} />
         </header>
     );

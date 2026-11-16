@@ -16,6 +16,9 @@ import { GAMES, getGame, getGameLanguages, gameHasMultipleLanguages, defaultLang
 import ShopSearchResults from '@/components/ShopSearchResults';
 import { useShopSearch } from '@/lib/hooks/useShopSearch';
 import type { ShopSearchResult } from '@/lib/shopSearch';
+import RequestCardModal from '@/components/RequestCardModal';
+import RequestCardLink from '@/components/RequestCardLink';
+import { useCardRequest } from '@/lib/hooks/useCardRequest';
 
 interface ExploreProps {
   onSelectCard: (card: Card) => void;
@@ -27,6 +30,10 @@ interface ExploreProps {
   onAddToCollection?: (card: Card) => void;
   // Opens a shop that matched the search by seller name.
   onSelectShop?: (shop: ShopSearchResult) => void;
+  // Requesting a missing card needs an account: false opens the shell's
+  // sign-in wall (onRequireAuth) and the form follows once signed in.
+  signedIn?: boolean;
+  onRequireAuth?: () => void;
 }
 
 /**
@@ -43,8 +50,9 @@ function preferredLanguageForGame(gameId: string, uiIsThai: boolean): GameLangua
   return defaultLanguageForGame(gameId);
 }
 
-const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1, onAddToCollection, onSelectShop }) => {
+const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localListings = [], currency = 'THB', exchangeRate = 1, onAddToCollection, onSelectShop, signedIn, onRequireAuth }) => {
   const { t, isThai } = useTranslation();
+  const cardRequest = useCardRequest({ signedIn, onRequireAuth });
   const [selectedGame, setSelectedGame] = useState<string>('pokemon');
   // Seeded from the UI language (see preferredLanguageForGame). Lazy initial
   // state, not an effect: seeding after mount would fire the sets fetch twice
@@ -646,15 +654,33 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                   would otherwise dead-end here while its results sit one tab
                   away. Hand the user the results instead of a shrug. */}
               {hasSearchResults && sealedProducts.length > 0 ? (
-                <button
-                  onClick={() => setBrowseMode('sealed')}
-                  className="mt-1 px-4 py-2 rounded-lg bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-xs font-black uppercase tracking-wider hover:bg-brand-cyan hover:text-brand-darker transition-colors flex items-center gap-2"
-                >
-                  <i className="fa-solid fa-box text-[11px]"></i>
-                  {isThai
-                    ? `พบสินค้าซีล ${sealedProducts.length} รายการ`
-                    : `${sealedProducts.length} sealed ${sealedProducts.length === 1 ? 'product' : 'products'} match`}
-                </button>
+                <>
+                  <button
+                    onClick={() => setBrowseMode('sealed')}
+                    className="mt-1 px-4 py-2 rounded-lg bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-xs font-black uppercase tracking-wider hover:bg-brand-cyan hover:text-brand-darker transition-colors flex items-center gap-2"
+                  >
+                    <i className="fa-solid fa-box text-[11px]"></i>
+                    {isThai
+                      ? `พบสินค้าซีล ${sealedProducts.length} รายการ`
+                      : `${sealedProducts.length} sealed ${sealedProducts.length === 1 ? 'product' : 'products'} match`}
+                  </button>
+                  <RequestCardLink onRequest={() => cardRequest.open(searchTerm)} className="mt-5 max-w-xs" />
+                </>
+              ) : hasSearchResults ? (
+                // A search that found nothing used to end on "select a set"
+                // here: the only way to ask for a missing card was a second
+                // search under the Scan tab.
+                <>
+                  <p className="text-slate-500 text-xs text-center break-words max-w-full">
+                    {t('cardRequest.noMatches')} &ldquo;{debouncedSearchTerm.trim()}&rdquo;
+                  </p>
+                  <button
+                    onClick={() => cardRequest.open(searchTerm)}
+                    className={`mt-5 inline-flex items-center gap-2 px-6 h-11 rounded-2xl bg-brand-cyan text-brand-darker font-black active:scale-95 transition-all ${isThai ? 'text-xs' : 'text-[10px] uppercase tracking-widest'}`}
+                  >
+                    <i className="fa-solid fa-plus"></i> {t('cardRequest.requestCta')}
+                  </button>
+                </>
               ) : (
                 <p className="text-slate-500 text-xs text-center">
                   {!getGame(selectedGame).enabled ? `${getGame(selectedGame).name} coming soon` : t('explore.selectSet')}
@@ -688,6 +714,17 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
                 </div>
                 <span aria-hidden="true">{/* add button placeholder */}</span>
               </div>
+
+              {/* Pinned above the list, not at its end: search returns its
+                  nearest matches for almost any text, so a card that is not
+                  in the catalog still gets a long list, and the way to ask
+                  for it has to be in view without scrolling past every near
+                  miss. Search only: a set being browsed is the whole set. */}
+              {hasSearchResults && (
+                <div className="flex-shrink-0 px-3 pt-2.5 pb-1">
+                  <RequestCardLink onRequest={() => cardRequest.open(searchTerm)} />
+                </div>
+              )}
 
               {/* Scrollable Card List — Virtualized */}
               <div
@@ -803,6 +840,13 @@ const Explore: React.FC<ExploreProps> = ({ onSelectCard, searchRequest, localLis
           onAddToCollection={onAddToCollection}
         />
       )}
+
+      <RequestCardModal
+        isOpen={cardRequest.isOpen}
+        onClose={cardRequest.close}
+        initialQuery={cardRequest.query}
+        onFoundCard={onSelectCard}
+      />
     </div>
   );
 };

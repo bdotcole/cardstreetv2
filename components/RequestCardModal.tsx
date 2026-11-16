@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import { pokemonService } from '@/services/pokemonService';
 import { getThumbnailUrl } from '@/lib/imageUtils';
+import { foldKey, scriptOf } from '@/lib/search/normalize';
 import CustomSelect from '@/components/CustomSelect';
 import { Card } from '@/types';
 import {
@@ -20,7 +21,7 @@ import {
 interface RequestCardModalProps {
     isOpen: boolean;
     onClose: () => void;
-    // The search text that returned no matches — prefilled and editable
+    // What the user had typed in the search box: prefilled and editable
     initialQuery: string;
     // When the "did you mean" lookup surfaces the card the user was after,
     // tapping it hands the card back instead of filing a request.
@@ -29,6 +30,30 @@ interface RequestCardModalProps {
 
 // Only offer games that are actually live in the catalog.
 const SELECTABLE_GAMES = GAMES.filter((g) => g.enabled);
+
+/**
+ * Split what was typed in the search box into the form's name and number:
+ * "blastoise piplup 38/236" -> "blastoise piplup" + "38/236". Only the
+ * printed "number/total" form moves. A bare trailing number is as often part
+ * of the name ("Porygon2", "Mewtwo 151").
+ */
+function splitSearchText(text: string): { name: string; number: string } {
+    const q = text.replace(/\s+/g, ' ').trim();
+    const m = q.match(/^(?:(.*\S)\s+)?#?(\d{1,4})\s*\/\s*(\d{1,4})$/);
+    if (!m) return { name: q, number: '' };
+    return { name: m[1] ?? '', number: `${m[2]}/${m[3]}` };
+}
+
+/**
+ * The card language to start the form on: the script of what was typed (Thai
+ * text is a Thai card, kana a Japanese one), else the app's own language.
+ * '' when the game does not print that language, so the user picks.
+ */
+function guessCardLanguage(text: string, uiLanguage: string, offered: GameLanguageCode[]): GameLanguageCode | '' {
+    const script = scriptOf(foldKey(text));
+    const guess = script === 'thai' ? 'th' : script === 'kana' || script === 'han' ? 'jp' : uiLanguage.toLowerCase();
+    return offered.includes(guess as GameLanguageCode) ? (guess as GameLanguageCode) : '';
+}
 
 // PostgREST reports an insert against a not-yet-migrated column as PGRST204
 // ("Could not find the 'game' column ... in the schema cache"); Postgres itself
@@ -82,16 +107,15 @@ const RequestCardModal: React.FC<RequestCardModalProps> = ({ isOpen, onClose, in
     useEffect(() => {
         if (isOpen) {
             setGameId(DEFAULT_GAME);
-            // Pre-select the current UI locale when the default game offers it,
-            // otherwise force an explicit pick for multi-language games.
-            const defaultGameLangs = getGameLanguages(DEFAULT_GAME).map((l) => l.code);
+            const typed = splitSearchText(initialQuery);
+            // The UI language arrives as 'EN' / 'TH' and the game codes are
+            // lower case: compared as-is this never matched, so every request
+            // started on an empty required field.
             setCardLanguage(
-                defaultGameLangs.includes(language as GameLanguageCode)
-                    ? (language as GameLanguageCode)
-                    : '',
+                guessCardLanguage(typed.name, language, getGameLanguages(DEFAULT_GAME).map((l) => l.code)),
             );
-            setCardName(initialQuery);
-            setCardNumber('');
+            setCardName(typed.name);
+            setCardNumber(typed.number);
             setNotes('');
             setErrorMessage('');
             setCandidates([]);

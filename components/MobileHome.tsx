@@ -2815,6 +2815,8 @@ export default function HomePage() {
                                 currency={currency}
                                 exchangeRate={exchangeRate}
                                 onAddToCollection={handleAddToCollection}
+                                signedIn={!!user && user.provider !== 'guest'}
+                                onRequireAuth={() => { requireAuth(t('authGate.requestCard')); }}
                             />
                         )}
                         {activeTab === 'marketplace' && showShopChooser && (
@@ -2880,7 +2882,15 @@ export default function HomePage() {
                                 onRequireAuth={(message) => { requireAuth(message); }}
                             />
                         )}
-                        {activeTab === 'add' && <AddCard onScanClick={handleScanCard} onSelectCard={setSelectedCard} isScanning={isAiLoading} />}
+                        {activeTab === 'add' && (
+                            <AddCard
+                                onScanClick={handleScanCard}
+                                onSelectCard={setSelectedCard}
+                                isScanning={isAiLoading}
+                                signedIn={!!user && user.provider !== 'guest'}
+                                onRequireAuth={() => { requireAuth(t('authGate.requestCard')); }}
+                            />
+                        )}
                         {activeTab === 'vault' && (
                             <Vault
                                 repriceCardId={repriceCardId}

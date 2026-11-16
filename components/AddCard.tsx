@@ -4,24 +4,30 @@ import { pokemonService } from '../services/pokemonService';
 import { Card } from '../types';
 import { useTranslation } from '@/lib/hooks/useTranslation';
 import RequestCardModal from './RequestCardModal';
+import RequestCardLink from './RequestCardLink';
+import { useCardRequest } from '@/lib/hooks/useCardRequest';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface AddCardProps {
   onScanClick: () => void;
   onSelectCard: (card: Card) => void;
   isScanning?: boolean;
+  // Requesting a missing card needs an account: false opens the shell's
+  // sign-in wall (onRequireAuth) and the form follows once signed in.
+  signedIn?: boolean;
+  onRequireAuth?: () => void;
 }
 
 type AddView = 'options' | 'manual';
 
-const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning = false }) => {
+const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning = false, signedIn, onRequireAuth }) => {
   const { t, isThai } = useTranslation();
   const [view, setView] = useState<AddView>('options');
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<Card[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAiResolving, setIsAiResolving] = useState(false);
-  const [isRequestOpen, setIsRequestOpen] = useState(false);
+  const cardRequest = useCardRequest({ signedIn, onRequireAuth });
   const searchTimeout = useRef<number | null>(null);
   // The search still in flight. A newer keystroke aborts it, so a superseded
   // term stops at its next stage and can never overwrite the newer results.
@@ -105,6 +111,14 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
             <span className={`text-[8px] text-brand-cyan/80 font-black ${isThai ? 'tracking-normal' : 'uppercase tracking-[0.2em]'}`}>{t('scan.syncingDatabase')}</span>
           </div>
         )}
+
+        {/* Above the results, not after them: search returns its nearest
+            matches for almost any text, so a card that is not in the catalog
+            still gets a full list, and the way to ask for it has to be in
+            view without scrolling past every near miss. */}
+        {!isSearching && results.length > 0 && (
+          <RequestCardLink onRequest={() => cardRequest.open(searchQuery)} />
+        )}
       </div>
 
       <div className="space-y-3">
@@ -151,7 +165,7 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
             <i className="fa-solid fa-ghost text-4xl mb-4 text-slate-800"></i>
             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-10 mb-6">{t('cardRequest.noMatches')} "{searchQuery}"</p>
             <button
-              onClick={() => setIsRequestOpen(true)}
+              onClick={() => cardRequest.open(searchQuery)}
               className="inline-flex items-center gap-2 px-6 h-11 rounded-2xl bg-brand-cyan text-brand-darker font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
             >
               <i className="fa-solid fa-plus"></i> {t('cardRequest.requestCta')}
@@ -223,9 +237,9 @@ const AddCard: React.FC<AddCardProps> = ({ onScanClick, onSelectCard, isScanning
       )}
       {view === 'options' ? renderOptions() : renderManualView()}
       <RequestCardModal
-        isOpen={isRequestOpen}
-        onClose={() => setIsRequestOpen(false)}
-        initialQuery={searchQuery}
+        isOpen={cardRequest.isOpen}
+        onClose={cardRequest.close}
+        initialQuery={cardRequest.query}
         onFoundCard={onSelectCard}
       />
     </>

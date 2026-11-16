@@ -21,6 +21,9 @@ import { resolveSellerState, needsPayoutActionInState } from '@/lib/sellerState'
 import ShopPauseSection from '@/components/ShopPauseSection';
 import ShopMinOrderSection from '@/components/ShopMinOrderSection';
 import StripePreScreen from '@/components/StripePreScreen';
+import RequestCardModal from '@/components/RequestCardModal';
+import RequestCardLink from '@/components/RequestCardLink';
+import { useCardRequest } from '@/lib/hooks/useCardRequest';
 import { Card } from '@/types';
 import { useDesktopCart } from '@/components/desktop/DesktopCartContext';
 import { formatTHB } from '@/components/desktop/DesktopMarketplace';
@@ -60,6 +63,9 @@ export default function DesktopSell() {
     const [results, setResults] = useState<Card[]>([]);
     const [searching, setSearching] = useState(false);
     const [searched, setSearched] = useState(false);
+    // A seller cannot list a card the catalog does not have, so the search
+    // offers to request it. No sign-in wall: this page renders signed in only.
+    const cardRequest = useCardRequest();
 
     const [listingCard, setListingCard] = useState<Card | null>(null);
     const [myListings, setMyListings] = useState<MarketplaceListing[]>([]);
@@ -426,6 +432,13 @@ export default function DesktopSell() {
                 <p className="text-slate-500 text-sm mt-6">{t('desktop.sell.noMatches')}</p>
             )}
 
+            {/* With results as well as without: search returns its nearest
+                matches for almost any text, so a missing card still gets a
+                grid. Cards only; the form asks for a card. */}
+            {searched && !searching && mode === 'cards' && (
+                <RequestCardLink onRequest={() => cardRequest.open(query.trim())} className="mt-4 max-w-md" />
+            )}
+
             {results.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
                     {results.map((card) => {
@@ -656,6 +669,13 @@ export default function DesktopSell() {
                     loading={stripeLoading}
                 />
             )}
+
+            <RequestCardModal
+                isOpen={cardRequest.isOpen}
+                onClose={cardRequest.close}
+                initialQuery={cardRequest.query}
+                onFoundCard={setListingCard}
+            />
         </div>
     );
 }

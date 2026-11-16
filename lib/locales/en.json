@@ -276,7 +276,8 @@
         "offer": "Sign in to make an offer",
         "follow": "Sign in to follow shops",
         "chat": "Sign in to message shops",
-        "watch": "Sign in to watch listings"
+        "watch": "Sign in to watch listings",
+        "requestCard": "Sign in to request a card"
     },
     "wishlistShare": {
         "button": "Share",
@@ -371,6 +372,8 @@
     "cardRequest": {
         "noMatches": "No matches in the registry for",
         "requestCta": "Request this card",
+        "cantFind": "Can't find your card?",
+        "requestIt": "Request it",
         "title": "Request a Card",
         "subtitle": "Can't find it? Tell us and we'll add it to the catalog.",
         "game": "Game",
