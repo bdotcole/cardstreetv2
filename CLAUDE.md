@@ -48,13 +48,13 @@ Supabase email links are **one-time**; mail providers' link scanners GET them be
 
 ## Card catalog
 
-`pokemon_cards` holds all card data, keyed by `id` (e.g. `sv4pt5-234`). Approximate language distribution:
+`pokemon_cards` holds all card data, keyed by `id` (e.g. `sv4pt5-234`). Pokémon rows by language (measured 2026-11-16):
 
 | Language | Rows | pHashed |
 |----------|------|---------|
-| en | ~19.8k | ~98% |
-| th | ~6.6k | ~100% |
-| ja | ~5.5k | ~57% (rest have no usable image URL upstream) |
+| en | ~20.5k | ~100% |
+| th | ~12.5k | 100% |
+| ja | ~13.5k | ~94% (the rest have no image on any host) |
 
 Each row may have `image_large`, `image_small`, and `raw_data` (full original API response). Use **`lib/cardMapper.ts:mapSupabaseCardToInternal`** to normalize into the in-app `Card` type — it handles TCGdex URL fixups (`.png` suffix), price-currency conversion, Thai set-name aliases, and image fallbacks. Don't reinvent this in new code; import it.
 
@@ -301,6 +301,20 @@ Coverage is limited to sets whose JA twin is in-catalog under the same code (fil
 **The 1:1-numbering premise is not universal.** A TH and a JA product can share a set code yet be different, renumbered lineups — `SVK` (JA rows = Deck Build BOX Stella Miracle) mislabeled 22/27 filled rows this way (Mew ex stored as "Radiant Charizard"; repaired 2026-07-03 by pHash-matching each TH row against the JA catalog). The script now **pHash-verifies every pair** (a Thai reprint keeps the same artwork): pairs over 14 bits apart are skipped, and a set where >30% of hashed pairs mismatch is skipped wholesale. The gate is 14, not 20, because **item/trainer cards share near-identical layouts and false-match in the 14–20 band** (SVK's Rare Candy passed as "Nest Ball" at ≤20).
 
 **Shared set codes across languages:** `pokemon_sets.id` is a single-col PK, so a code can only carry one language's set row. When a TH and a JA product genuinely share a code with *different* lineups, the Thai product gets its own suffixed set id — precedent: `SVK-th` (เด็คบิลด์บ็อกซ์ สเตลลาร์มิราเคิล, split 2026-07-03; the 50 Thai cards' `set_id` moved to `SVK-th`, card ids unchanged). The scanner needs no changes for this: tier-1's second matcher leg (`set_id ILIKE '<code>%'` + language filter) resolves a printed "SVK" on a Thai card to `SVK-th`.
+
+## Japanese Sun & Moon era (`scripts/ingest/jp-sun-moon-sets.mjs`)
+
+The Japanese catalog had no set released between 2007 and 2020, so no Japanese Tag Team card existed (a search for "blastoise and piplup" found the English and Thai prints only). On 2026-11-16 the Sun & Moon boosters went in: **35 sets, 3,139 cards** (`SM1S` to `SM12a`, with the "+" sets as `SM1p` to `SM5p`), under series `Sun & Moon` with English set names, as on the Japanese Sword & Shield and Scarlet & Violet shelves. Three steps, `build` and `names` read-only, `commit` insert-only (`SUPABASE_SECRET_KEY` in the environment); `logos` and `fill-names` top up rows already inserted.
+
+What the run established, for the eras still missing (ADV, DP, LEGEND, BW, XY, XY BREAK and Sword & Shield S1 to S4a):
+
+- **A missing `image` field on TCGdex is not missing art.** Its `ja` card objects carry no `image` for this era, yet `assets.tcgdex.net/ja/SM/<SET>/<localId>/high.webp` answers 200 (slowly: 15 s an image). Limitless' full-size file (`.../tpc/<SET>/<SET>_<n>_R_JP.png`, 736px, n unpadded) is sharper and fast, so it is tried first. Probe the asset path before calling a set imageless.
+- **The rainbow and gold secrets have art nowhere** (TCGdex, Limitless, and the official pokemon-card.com search, which does not list them at all): 254 of the 3,139 rows are imageless.
+- **`english_name` comes from the print twin, never from a picture alone.** Limitless' page for a Japanese card lists its "Int. Prints" (Cosmic Eclipse #192); the name is read from our own English row at that set and number. The page's Japanese name must equal TCGdex's for that number first (0 disagreements over 2,826 pages). A pHash twin is not safe for Trainers: the nearest English print to 溶接工 (Welder) was Martial Arts Dojo at 8 bits. Prints Limitless does not list take the name their other prints resolved to. Five rows stayed empty rather than guessed.
+- **TCGdex drops the Prism Star mark**: シェイミ is both Shaymin and Shaymin ◇. The twin tells them apart; the species name alone does not.
+- **Ids are TCGdex's**, so a Japanese `SM9` (Tag Bolt) sits beside the English `sm9` (Team Up), as `SV10` / `sv10` already did. Lookups by id are exact-case; never `ilike` a set or card id.
+- **Bulbagarden logos**: the search API answers anything, the media host returns 403 to a browser-style User-Agent from a script, and some files 403 Node's fetch whatever it sends (curl with a plain tool name works). Take only the exact title `File:<CODE> Logo.png` / `Logo JP.png`: for a code English shares, the search lists `<CODE> Logo EN.png` first, which is a different product. The split sets `SM1S` to `SM5p` have no logo there.
+- **Not ingested:** `SM0` and `SMP2` (TCGdex lists no cards), the starter decks, and the Japanese promos (the id `SM-P` is held by the Thai promo set). The new rows have no `tcgplayer_id`, so no market price until the PriceCharting bridge links them.
 
 ## Search name dictionary (lib/search)
 
